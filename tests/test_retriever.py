@@ -51,6 +51,8 @@ def test_rules_for_a_course_that_is_not_indexed_are_ignored() -> None:
     ("Who teaches this?", "instructor_and_ratings"),
     ("Does it teach decorators?", "topic_coverage"),
     ("What are the prerequisites?", "requirements"),
+    ("How much RAM do I need?", "requirements"),
+    ("How much does it cost?", "duration_and_price"),
     ("Who is this course for?", "audience"),
     ("What will I learn?", "learning_outcomes"),
     ("List all topics", "curriculum_list"),
@@ -100,7 +102,8 @@ def retriever(tmp_path) -> Retriever:
     ]
     client = open_client(tmp_path / "chroma")
     index_chunks({"documents": [], "chunks": chunks}, fake_embed, client, collection_name="test_chunks")
-    return Retriever(get_collection(client, "test_chunks"), fake_embed, RULES, top_k=4, min_similarity=0.05)
+    return Retriever(get_collection(client, "test_chunks"), fake_embed, RULES, top_k=4, min_similarity=0.05,
+                     min_similarity_no_course=0.05)
 
 
 def test_fact_question_returns_one_chunk_of_the_right_course(retriever: Retriever) -> None:
@@ -130,7 +133,7 @@ def test_curriculum_list_with_no_course_asks_which_course(retriever: Retriever) 
 
 def test_other_layout_falls_back_to_the_whole_course(retriever: Retriever) -> None:
     rules = {**RULES, "courses": [{"pdf_name": "Other.pdf", "aliases": ["brochure"]}]}
-    r = Retriever(retriever.collection, fake_embed, rules, top_k=4, min_similarity=0.05)
+    r = Retriever(retriever.collection, fake_embed, rules, top_k=4, min_similarity=0.05, min_similarity_no_course=0.05)
     result = r.retrieve("brochure duration length")
     assert [c.chunk_type for c in result.chunks] == ["section"]
 
@@ -138,6 +141,12 @@ def test_other_layout_falls_back_to_the_whole_course(retriever: Retriever) -> No
 def test_off_topic_question_is_rejected(retriever: Retriever) -> None:
     result = retriever.retrieve("zzz qqq xxx")
     assert not result.in_scope and result.chunks == []
+
+
+def test_no_course_named_needs_a_stronger_match(retriever: Retriever) -> None:
+    strict = Retriever(retriever.collection, fake_embed, RULES, top_k=4, min_similarity=0.05, min_similarity_no_course=0.99)
+    assert not strict.retrieve("duration length price").in_scope
+    assert strict.retrieve("python duration length price").in_scope
 
 
 def test_empty_question_is_an_error(retriever: Retriever) -> None:

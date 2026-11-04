@@ -13,6 +13,8 @@ among the rest. So each question is routed first, using config/retrieval_rules.j
                    and a smaller context means a faster answer from the LLM later.
 
 Questions matching nothing in the documents are marked out of scope by a similarity cutoff.
+The cutoff is stricter when no course is named, because a phrase such as "the price of"
+resembles course text even in "What is the price of bitcoin?".
 If a chunk type does not exist for a course (a PDF with another layout), the search widens to
 the whole course, so new layouts degrade gracefully instead of returning nothing.
 """
@@ -148,12 +150,15 @@ def _to_chunk(chunk_id: str, text: str, meta: dict, similarity: Optional[float])
 
 class Retriever:
     def __init__(self, collection, embed: Embedder, rules: Optional[dict] = None,
-                 top_k: Optional[int] = None, min_similarity: Optional[float] = None) -> None:
+                 top_k: Optional[int] = None, min_similarity: Optional[float] = None,
+                 min_similarity_no_course: Optional[float] = None) -> None:
         self.collection = collection
         self.embed = embed
         self.rules = rules if rules is not None else load_rules()
         self.top_k = top_k or config.RETRIEVAL_TOP_K
         self.min_similarity = config.RETRIEVAL_MIN_SIMILARITY if min_similarity is None else min_similarity
+        self.min_similarity_no_course = (config.RETRIEVAL_MIN_SIMILARITY_NO_COURSE if min_similarity_no_course is None
+                                         else min_similarity_no_course)
         stored = collection.get(include=["metadatas"])["metadatas"]
         self.course_names = {m["pdf_name"]: m["course_name"] for m in stored}
 
@@ -186,7 +191,8 @@ class Retriever:
         vector = self.embed([question])[0]
         best = self._search(vector, None, 1)
         result.best_similarity = best[0].similarity if best else 0.0
-        if result.best_similarity < self.min_similarity:
+        cutoff = self.min_similarity if route.courses else self.min_similarity_no_course
+        if result.best_similarity < cutoff:
             result.in_scope = False
             return result
 

@@ -30,3 +30,6 @@ RETRIEVAL_RULES_PATH = PROJECT_ROOT / os.getenv("LMS_RETRIEVAL_RULES_FILE", "con
 RETRIEVAL_TOP_K = int(os.getenv("RETRIEVAL_TOP_K", 4))
 # Below this similarity a question is treated as unrelated to the courses.
 RETRIEVAL_MIN_SIMILARITY = float(os.getenv("RETRIEVAL_MIN_SIMILARITY", 0.30))
+# Stricter when no course is named. Measured on the dev questions: the highest off-topic score
+# was 0.409 and the lowest real one 0.482. Re-measure this with the real PDFs.
+RETRIEVAL_MIN_SIMILARITY_NO_COURSE = float(os.getenv("RETRIEVAL_MIN_SIMILARITY_NO_COURSE", 0.445))
