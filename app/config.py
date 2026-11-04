@@ -24,3 +24,9 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM
 EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", 16))   # small: runs on a laptop CPU
 CHROMA_DIR = PROJECT_ROOT / os.getenv("CHROMA_DIR", "vector_db/chroma")
 CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "course_chunks")
+
+# --- Retrieval ------------------------------------------------------------------------
+RETRIEVAL_RULES_PATH = PROJECT_ROOT / os.getenv("LMS_RETRIEVAL_RULES_FILE", "config/retrieval_rules.json")
+RETRIEVAL_TOP_K = int(os.getenv("RETRIEVAL_TOP_K", 4))
+# Below this similarity a question is treated as unrelated to the courses.
+RETRIEVAL_MIN_SIMILARITY = float(os.getenv("RETRIEVAL_MIN_SIMILARITY", 0.30))

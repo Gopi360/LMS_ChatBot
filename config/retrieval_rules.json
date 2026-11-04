@@ -1,0 +1,61 @@
+{
+  "_comment": "Question routing. Course short names and question types live here, not in code. When new PDFs arrive, update 'courses'. A course with no entry is still found by its full title.",
+
+  "courses": [
+    {"pdf_name": "AWS_Certified_Cloud.pdf",
+     "aliases": ["aws", "amazon web services", "cloud practitioner", "clf-c02", "cloud computing", "cloud"]},
+    {"pdf_name": "Ethical_Hacking.pdf",
+     "aliases": ["ethical hacking", "hacking", "penetration testing", "pentesting", "cybersecurity", "cyber security"]},
+    {"pdf_name": "Java_Masterclass.pdf",
+     "aliases": ["java masterclass", "java"]},
+    {"pdf_name": "Machine_Learning.pdf",
+     "aliases": ["machine learning a-z", "machine learning", "ml"]},
+    {"pdf_name": "The_Complete_Python_Bootcamp.pdf",
+     "aliases": ["complete python bootcamp", "python bootcamp", "python"]}
+  ],
+
+  "course_word_after_alias": "\\s+(course|bootcamp|masterclass|class|program|programme|training)\\b",
+
+  "compare_patterns": ["\\bcompare\\b", "\\bcomparison\\b", "\\bvs\\.?\\b", "\\bversus\\b", "\\bdifference\\b",
+                       "\\bbetter\\b", "\\bor\\b", "\\bboth\\b", "\\bcheaper\\b", "\\blonger\\b", "\\bshorter\\b"],
+
+  "intents": [
+    {"name": "curriculum_list", "chunk_types": ["curriculum_overview"], "fetch_all": true,
+     "patterns": ["\\b(list|show|give)\\b.*\\b(topics|sections|modules|chapters)\\b",
+                  "\\bwhat (are|is) (all )?(the )?(topics|sections|modules|chapters)\\b",
+                  "\\bwhat topics\\b", "\\bwhich (topics|sections|modules)\\b", "\\bcurriculum\\b", "\\bsyllabus\\b",
+                  "\\bcourse (outline|structure|content)\\b", "\\btable of contents\\b"]},
+
+    {"name": "instructor_and_ratings", "chunk_types": ["facts"], "section": "Course overview", "max_chunks": 1,
+     "patterns": ["\\binstructors?\\b", "\\bwho (teach|teaches|created|made|is teaching)\\b", "\\bteacher\\b", "\\bauthor\\b",
+                  "\\btrainer\\b", "\\bcreated by\\b", "\\brating\\b", "\\brated\\b", "\\breviews?\\b", "\\blearners\\b",
+                  "\\bstudents? (are )?(enrolled|have)\\b", "\\bhow many (students|people|learners)\\b", "\\benrolled\\b",
+                  "\\bpopular\\b", "\\b(last )?updated\\b", "\\blanguage\\b", "\\bcaptions?\\b", "\\bsubtitles?\\b", "\\bcategory\\b"]},
+
+    {"name": "duration_and_price", "chunk_types": ["facts"], "section": "Duration, inclusions and price", "max_chunks": 1,
+     "patterns": ["\\bhow long\\b", "\\bduration\\b", "\\btotal length\\b", "\\bhow many (hours|lectures|sections|articles)\\b",
+                  "\\bhours\\b", "\\bprice\\b", "\\bprices\\b", "\\bcosts?\\b", "\\bfees?\\b", "\\bhow much\\b", "\\bcheap(er|est)?\\b",
+                  "\\bexpensive\\b", "\\bdiscount\\b", "\\bcertificates?\\b", "\\bcertifications?\\b",
+                  "\\bdownloadable\\b", "\\bcoding exercises\\b", "\\bpractice test\\b", "\\bon mobile\\b",
+                  "\\bwhat('s| is| does).*\\b(included|include)\\b(?!.*\\b(topic|cover)\\b)$", "\\bcomes? with\\b", "\\blongest\\b", "\\bshortest\\b"]},
+
+    {"name": "requirements", "chunk_types": ["requirements"], "max_chunks": 2,
+     "patterns": ["\\bprerequisites?\\b", "\\brequirements?\\b", "\\brequired\\b", "\\bneed to know\\b", "\\bdo i need\\b",
+                  "\\bneed before\\b", "\\bbefore (starting|taking|joining|i start)\\b", "\\bprior (knowledge|experience)\\b",
+                  "\\bexperience (needed|necessary|required)\\b"]},
+
+    {"name": "audience", "chunk_types": ["audience"], "max_chunks": 2,
+     "patterns": ["\\bwho (is|are) (this|the|it)\\b.*\\b(for|course)\\b", "\\bwho should\\b", "\\bwho can\\b", "\\btarget audience\\b",
+                  "\\bsuitable for\\b", "\\bmeant for\\b", "\\bdesigned for\\b", "\\bright for\\b", "\\bgood for\\b", "\\bfor beginners\\b",
+                  "\\baimed at\\b"]},
+
+    {"name": "learning_outcomes", "chunk_types": ["learn"], "max_chunks": 5,
+     "patterns": ["\\bwhat (will|would|do|can|am) (i|we|you|students)\\b.*\\b(learn|learning|gain|achieve|build)\\b",
+                  "\\blearning (outcomes?|objectives?|goals?)\\b", "\\bwhat skills\\b", "\\bbe able to\\b", "\\bwhat.*\\bteach me\\b"]},
+
+    {"name": "topic_coverage", "chunk_types": ["curriculum", "description", "learn"],
+     "patterns": ["\\bcovers?\\b", "\\bcovered\\b", "\\bcovering\\b", "\\bteach(es)?\\b", "\\btaught\\b", "\\binclude(s)?\\b",
+                  "\\bis there\\b.*\\b(section|lecture|module|lesson|chapter)\\b", "\\b(section|lecture|module|lesson|chapter)s? (on|about)\\b",
+                  "\\blearn (about|how)\\b", "\\bdiscuss(es)?\\b", "\\bexplains?\\b"]}
+  ]
+}
