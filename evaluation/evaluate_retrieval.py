@@ -4,6 +4,7 @@
     python -m evaluation.evaluate_retrieval --set held_out # final score, not for tuning
     python -m evaluation.evaluate_retrieval --baseline     # plain top-k with no routing
     python -m evaluation.evaluate_retrieval --scores       # similarity spread, to set the cutoff
+    python -m evaluation.evaluate_retrieval --patterns-only # routing without the example questions
 
 A question passes when every expected course has a chunk of the expected type (and section,
 when given) in the results. An out-of-scope question passes when it is rejected. "all_parts"
@@ -48,10 +49,13 @@ def main() -> None:
     ap.add_argument("--set", choices=["dev", "held_out"], default="dev")
     ap.add_argument("--baseline", action="store_true")
     ap.add_argument("--scores", action="store_true")
+    ap.add_argument("--patterns-only", action="store_true")
     args = ap.parse_args()
 
     items = json.loads(QUESTIONS_PATH.read_text(encoding="utf-8"))[args.set]
     retriever = get_retriever()
+    if args.patterns_only:
+        retriever.matcher = None
     in_scope = [i for i in items if i.get("scope") is not False]
     results = []
     for item in items:

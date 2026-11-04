@@ -7,7 +7,8 @@ from typing import List
 import pytest
 
 from app.ingestion.indexer import get_collection, index_chunks, open_client
-from app.retrieval.retriever import Retriever, build_filter, find_courses, load_rules, route_question
+from app.retrieval.retriever import (IntentMatcher, Retriever, build_filter, find_courses, load_rules, mask_courses,
+                                     route_question)
 
 RULES = load_rules()
 COURSES = {
@@ -152,3 +153,151 @@ def test_no_course_named_needs_a_stronger_match(retriever: Retriever) -> None:
 def test_empty_question_is_an_error(retriever: Retriever) -> None:
     with pytest.raises(ValueError):
         retriever.retrieve("   ")
+
+
+# ---- matching a question to example questions -----------------------------------------
+EXAMPLE_RULES = {"intents": [
+    {"name": "instructor_and_ratings", "chunk_types": ["facts"], "section": "Course overview", "max_chunks": 1,
+     "patterns": [r"\binstructor\b"], "examples": ["alpha beta gamma delta"]},
+    {"name": "requirements", "chunk_types": ["requirements"], "max_chunks": 2,
+     "patterns": [], "examples": ["alpha beta gamma epsilon", "zeta eta theta iota"]}],
+    "no_intent_examples": ["kappa lambda mu nu"]}
+
+
+def _matcher(min_similarity: float = 0.5, min_margin: float = 0.0) -> IntentMatcher:
+    return IntentMatcher(EXAMPLE_RULES, fake_embed, min_similarity, min_margin)
+
+
+def test_matcher_picks_the_intent_of_the_closest_example() -> None:
+    assert _matcher().match("zeta eta theta iota") == "requirements"
+
+
+def test_matcher_gives_up_below_the_similarity_cutoff() -> None:
+    assert _matcher(min_similarity=0.99).match("zeta eta theta") is None
+
+
+def test_matcher_gives_up_when_two_intents_are_too_close() -> None:
+    assert _matcher(min_margin=0.3).match("alpha beta gamma") is None
+
+
+def test_matcher_stays_general_on_a_no_intent_example() -> None:
+    assert _matcher().match("kappa lambda mu nu") is None
+
+
+def test_matcher_embeds_the_examples_only_once() -> None:
+    calls = []
+
+    def counting(texts: List[str]) -> List[List[float]]:
+        calls.append(texts)
+        return fake_embed(texts)
+
+    matcher = IntentMatcher(EXAMPLE_RULES, counting, 0.5, 0.0)
+    assert not calls                                  # nothing is embedded until it is needed
+    matcher.match("zeta eta")
+    matcher.match("zeta eta")
+    assert len([c for c in calls if len(c) > 1]) == 1
+
+
+def test_matcher_with_no_examples_never_matches() -> None:
+    assert IntentMatcher({"intents": []}, fake_embed, 0.0, 0.0).match("anything") is None
+
+
+@pytest.mark.parametrize("question, courses, masked", [
+    ("Who runs the AWS course?", [AWS], "Who runs this course?"),
+    ("Does the AWS course use AWS Lambda?", [AWS], "Does this course use AWS Lambda?"),
+    ("Who runs the Python programming course?", [PY], "Who runs this course?"),
+    ("aws course whats the full breakdown", [AWS], "this course whats the full breakdown"),
+    ("What are the goals of the machine learning course?", [ML], "What are the goals of this course?"),
+    ("Does the Machine Learning course use Python?", [ML], "Does this course use Python?"),
+    ("Is the python bootcamp hard?", [PY], "Is this course hard?"),
+])
+def test_mask_courses_replaces_only_the_routed_course(question: str, courses: List[str], masked: str) -> None:
+    assert mask_courses(question, courses, RULES, COURSES) == masked
+
+
+@pytest.mark.parametrize("question, course", [
+    ("What are the parts of a Java class?", JAVA),
+    ("How do I write a Python class?", PY),
+    ("What is cloud storage?", AWS),
+    ("Is Python free?", PY),
+    ("who runs aws", AWS),
+])
+def test_a_bare_name_may_be_the_topic_so_it_is_not_masked(question: str, course: str) -> None:
+    assert mask_courses(question, [course], RULES, COURSES) is None
+
+
+def test_two_questions_in_one_count_as_a_comparison() -> None:
+    found = find_courses("Who teaches Python and who teaches Java?", RULES, COURSES)
+    assert found == [PY, JAVA]
+
+
+@pytest.mark.parametrize("question, course", [
+    ("Does the Machine Learning course use Python and how long is it?", ML),
+    ("Does the AWS course cover machine learning and what are the prerequisites?", AWS),
+])
+def test_a_second_question_about_the_same_course_is_not_a_comparison(question: str, course: str) -> None:
+    assert find_courses(question, RULES, COURSES) == [course]
+
+
+def _with_examples(retriever: Retriever, examples: List[str], **kw) -> Retriever:
+    rules = {**RULES, "intents": [{"name": "requirements", "chunk_types": ["requirements"], "max_chunks": 2,
+                                   "patterns": [r"\bprerequisites\b"], "examples": examples}]}
+    return Retriever(retriever.collection, fake_embed, rules, top_k=4, min_similarity=0.05, min_similarity_no_course=0.05,
+                     min_intent_similarity=0.5, min_intent_margin=0.0, **kw)
+
+
+def test_example_match_narrows_the_search_when_no_pattern_fits(retriever: Retriever) -> None:
+    result = _with_examples(retriever, ["what must i bring to this course"]).retrieve("What must I bring to the python course?")
+    assert result.route.intent == "requirements" and result.route.matched_by == "example"
+    assert [c.chunk_type for c in result.chunks] == ["requirements"]
+
+
+def test_a_pattern_match_is_never_overridden_by_examples(retriever: Retriever) -> None:
+    result = _with_examples(retriever, ["nothing like it"]).retrieve("python prerequisites")
+    assert result.route.intent == "requirements" and result.route.matched_by == "pattern"
+
+
+def test_examples_are_skipped_when_no_course_is_named(retriever: Retriever) -> None:
+    result = _with_examples(retriever, ["what must i bring"]).retrieve("what must i bring")
+    assert result.route.intent == "general"
+
+
+def test_examples_can_be_switched_off(retriever: Retriever) -> None:
+    r = _with_examples(retriever, ["what must i bring to this course"], use_examples=False)
+    assert r.retrieve("What must I bring to the python course?").route.intent == "general"
+
+
+def _one_intent(retriever: Retriever, **intent) -> Retriever:
+    rules = {**RULES, "intents": [{"name": "custom", "patterns": [], **intent}]}
+    return Retriever(retriever.collection, fake_embed, rules, top_k=4, min_similarity=0.05, min_similarity_no_course=0.05,
+                     min_intent_similarity=0.5, min_intent_margin=0.0)
+
+
+def test_an_outline_found_by_example_keeps_a_normal_search_too(retriever: Retriever) -> None:
+    r = _one_intent(retriever, chunk_types=["curriculum_overview"], fetch_all=True,
+                    examples=["break down decorators for me in this course"])
+    chunks = r.retrieve("break down decorators for me in the python course").chunks
+    ids = [c.chunk_id for c in chunks]
+    assert {"curriculum_overview", "curriculum"} <= {c.chunk_type for c in chunks} and len(ids) == len(set(ids))
+
+
+def test_an_outline_found_by_pattern_stays_the_outline_only(retriever: Retriever) -> None:
+    chunks = retriever.retrieve("list all sections of python").chunks
+    assert {c.chunk_type for c in chunks} == {"curriculum_overview"}
+
+
+def test_one_fact_limit_applies_after_an_example_match(retriever: Retriever) -> None:
+    r = _one_intent(retriever, chunk_types=["facts"], max_chunks=1, examples=["what will this course set me back"])
+    assert len(r.retrieve("what will the python course set me back").chunks) == 1
+
+
+def test_an_intent_may_have_examples_and_no_patterns(retriever: Retriever) -> None:
+    rules = {"intents": [{"name": "custom", "chunk_types": ["facts"], "examples": ["x"]}]}
+    assert route_question("anything", rules, COURSES).intent == "general"
+
+
+def test_an_intent_with_missing_fields_is_rejected_when_the_rules_load(tmp_path) -> None:
+    path = tmp_path / "rules.json"
+    path.write_text('{"intents": [{"name": "custom", "examples": ["x"]}]}', encoding="utf-8")
+    with pytest.raises(ValueError, match="custom"):
+        load_rules(path)

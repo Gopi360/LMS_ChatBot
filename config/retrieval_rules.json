@@ -14,30 +14,38 @@
      "aliases": ["complete python bootcamp", "python bootcamp", "python"]}
   ],
 
-  "course_word_after_alias": "\\s+(course|bootcamp|masterclass|class|program|programme|training)\\b",
+  "course_word_after_alias": "\\s+((programming|coding|online)\\s+)?(courses?|bootcamp|masterclass|class|program|programme|training)\\b",
+  "clear_course_word": "\\b(courses?|bootcamp|masterclass|training)\\b",
+  "second_question_pattern": "\\band (who|what|how|which)\\b",
 
   "compare_patterns": ["\\bcompare\\b", "\\bcomparison\\b", "\\bvs\\.?\\b", "\\bversus\\b", "\\bdifference\\b",
                        "\\bbetter\\b", "\\bor\\b", "\\bboth\\b", "\\bcheaper\\b", "\\blonger\\b", "\\bshorter\\b"],
 
+  "no_intent_examples": ["Tell me about this course", "What is this course about?", "Is this course any good?", "Give me an overview of this course", "Should I buy this course?"],
+
   "intents": [
     {"name": "curriculum_list", "chunk_types": ["curriculum_overview"], "fetch_all": true,
+     "examples": ["What is the outline of this course?", "Show me how this course is structured", "What does this course consist of, section by section?", "Break down this course for me", "Can I see the course plan?", "What are the main parts of this course?", "Walk me through what is inside this course", "How is this course organised?", "What is the structure of this course?", "What are the parts of this course?", "Give me the full breakdown of this course"],
      "patterns": ["\\b(list|show|give)\\b.*\\b(topics|sections|modules|chapters)\\b",
                   "\\bwhat (are|is) (all )?(the )?(topics|sections|modules|chapters)\\b",
                   "\\bwhat (topics|sections|modules|chapters)\\b", "\\bwhich (topics|sections|modules|chapters)\\b", "\\bcurriculum\\b", "\\bsyllabus\\b",
                   "\\bcourse (outline|structure|content)\\b", "\\btable of contents\\b"]},
 
     {"name": "instructor_and_ratings", "chunk_types": ["facts"], "section": "Course overview", "max_chunks": 1,
+     "examples": ["Who runs this course?", "Who is behind this course?", "Who will be teaching me?", "Who leads this course?", "Who is in charge of this course?", "What do people think of this course?", "How well is this course rated?", "How many people have signed up?", "Is this course recent?", "What language is this course in?"],
      "patterns": ["\\binstructors?\\b", "\\bwho (teach|teaches|created|made|is teaching)\\b", "\\bteacher\\b", "\\bauthor\\b",
                   "\\btrainer\\b", "\\bcreated by\\b", "\\bratings?\\b", "\\brated\\b", "\\breviews?\\b", "\\blearners\\b",
                   "\\bstudents? (are )?(enrolled|have)\\b", "\\bhow many (students|people|learners)\\b", "\\benrolled\\b",
                   "\\bpopular\\b", "\\b(last )?updated\\b", "\\blanguage\\b", "\\bcaptions?\\b", "\\bsubtitles?\\b", "\\bcategory\\b"]},
 
     {"name": "requirements", "chunk_types": ["requirements"], "max_chunks": 2,
+     "examples": ["What should I know before I begin?", "What do I need to have first?", "Do I have to know anything already?", "Can I start with zero background?", "What software or equipment must I have?", "Is any background necessary for this course?", "What should I prepare before this course?"],
      "patterns": ["\\bprerequisites?\\b", "\\brequirements?\\b", "\\brequired\\b", "\\bneed to know\\b", "\\bdo i need\\b",
                   "\\bneed before\\b", "\\bbefore (starting|taking|joining|i start)\\b", "\\bprior (knowledge|experience)\\b",
                   "\\bknowledge (needed|necessary|required)\\b", "\\bexperience (needed|necessary|required)\\b"]},
 
     {"name": "duration_and_price", "chunk_types": ["facts"], "section": "Duration, inclusions and price", "max_chunks": 1,
+     "examples": ["How much time will this course take?", "How much do I have to pay?", "What is the length of this course?", "Do I get anything when I finish?", "How big is this course?", "What do I get with this course?", "Is this course free?", "Can I watch this course on my phone?", "Can I access it on mobile or TV?"],
      "patterns": ["\\bhow long\\b", "\\bduration\\b", "\\btotal length\\b", "\\b(how many|more|most|fewer|number of) (hours|lectures|sections|articles)\\b",
                   "\\bhours\\b", "\\bprice\\b", "\\bprices\\b", "\\bcosts?\\b", "\\bfees?\\b", "\\bhow much\\b", "\\bcheap(er|est)?\\b",
                   "\\bexpensive\\b", "\\bdiscount\\b", "\\bcertificates?\\b", "\\bcertifications?\\b",
@@ -45,16 +53,19 @@
                   "\\bwhat('s| is| does).*\\b(included|include)\\b(?!.*\\b(topic|cover)\\b)$", "\\bcomes? with\\b", "\\blongest\\b", "\\bshortest\\b", "\\bwhich exam\\b", "\\bprepares? (me |you |students )?for\\b"]},
 
     {"name": "audience", "chunk_types": ["audience"], "max_chunks": 2,
+     "examples": ["Is this course a good fit for me?", "Who is this course intended for?", "I have never coded, should I take this?", "Would this suit someone changing careers?", "What kind of person should enrol?", "Is this course okay for a complete beginner?", "Is this course for me?"],
      "patterns": ["\\bwho (is|are) (this|the|it)\\b.*\\b(for|course)\\b", "\\bwho should\\b", "\\bwho can\\b", "\\btarget audience\\b",
                   "\\bsuitable for\\b", "\\bmeant for\\b", "\\bdesigned for\\b", "\\bright for\\b", "\\bgood for\\b", "\\bbeginners?\\b",
                   "\\bcan (a|an|i|we)\\b.*\\b(join|take|enroll|attend)\\b",
                   "\\baimed at\\b"]},
 
     {"name": "learning_outcomes", "chunk_types": ["learn"], "max_chunks": 5,
+     "examples": ["What will this course help me achieve?", "What are the goals of this course?", "What will I be able to do afterwards?", "What do I get out of this course?", "How will this course help me?", "What skills will I walk away with?", "What is the aim of this course?", "What is the purpose of this course?", "What will I have at the end of this course?", "What do I walk away with?"],
      "patterns": ["\\bwhat (will|would|do|can|am) (i|we|you|students)\\b.*\\b(learn|learning|gain|achieve|build)\\b",
                   "\\blearning (outcomes?|objectives?|goals?)\\b", "\\bwhat skills\\b", "\\bbe able to\\b", "\\bwhat.*\\bteach me\\b"]},
 
     {"name": "topic_coverage", "chunk_types": ["curriculum", "description", "learn"],
+     "examples": ["Does this course go into a particular topic?", "Is that subject part of this course?", "Will we touch on this topic?", "Does this course deal with that?", "Are there lessons about this subject?", "Does this course use that tool?", "Does this course use that programming language?"],
      "patterns": ["\\bcovers?\\b", "\\bcovered\\b", "\\bcovering\\b", "\\bteach(es)?\\b", "\\btaught\\b", "\\binclude(s)?\\b",
                   "\\bis there\\b.*\\b(section|lecture|module|lesson|chapter)\\b", "\\b(section|lecture|module|lesson|chapter)s? (on|about)\\b",
                   "\\blearn (about|how)\\b", "\\bdiscuss(es)?\\b", "\\bexplains?\\b"]}

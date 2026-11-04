@@ -9,6 +9,11 @@ among the rest. So each question is routed first, using config/retrieval_rules.j
 
 1. Which course?   Short names ("AWS", "ML"). Two courses only when the question compares them.
 2. What kind?      Duration -> facts, prerequisites -> requirements, "does it cover X" -> curriculum.
+                   Patterns decide first, because they are precise. If none fits and a course is
+                   named, the question is compared by meaning with example questions, which catches
+                   wordings no pattern lists ("Who runs the AWS course?"). A match must be strong
+                   and clearly ahead of the next type; otherwise the search stays broad, because a
+                   wrong narrow search loses the answer while a broad one usually still finds it.
 3. Search          Inside that course and chunk type. Facts questions need one chunk, not four,
                    and a smaller context means a faster answer from the LLM later.
 
@@ -45,6 +50,7 @@ class Route:
     section: Optional[str] = None
     max_chunks: Optional[int] = None
     fetch_all: bool = False
+    matched_by: Optional[str] = None                     # "pattern", "example", or None for general
 
 
 @dataclass
@@ -74,7 +80,11 @@ class RetrievalResult:
 
 
 def load_rules(path: Optional[Path] = None) -> dict:
-    return json.loads(Path(path or config.RETRIEVAL_RULES_PATH).read_text(encoding="utf-8"))
+    rules = json.loads(Path(path or config.RETRIEVAL_RULES_PATH).read_text(encoding="utf-8"))
+    for intent in rules.get("intents", []):
+        if "name" not in intent or "chunk_types" not in intent:
+            raise ValueError(f"Question type {intent.get('name', intent)} needs a name and chunk_types.")
+    return rules
 
 
 # ---- routing --------------------------------------------------------------------------
@@ -88,43 +98,108 @@ def _alias_table(rules: dict, course_names: Dict[str, str]) -> List[Tuple[str, s
     return sorted(set(table), key=lambda item: -len(item[0]))
 
 
-def find_courses(question: str, rules: dict, course_names: Dict[str, str]) -> List[str]:
-    """Courses named in the question. Two only when it compares them, because a course title
-    or topic often names another course: "Does the Machine Learning course use Python?"."""
-    text = question.lower()
-    taken = [False] * len(text)
-    found: List[Tuple[int, str, bool]] = []                  # position, pdf, followed by "course"
+def _course_mentions(question: str, rules: dict, course_names: Dict[str, str]) -> List[Tuple[int, int, str, bool]]:
+    """(start, end, pdf, followed by "course") for each course named, in reading order.
+    `end` includes the word "course" when it follows."""
+    taken = [False] * len(question)
+    found: List[Tuple[int, int, str, bool]] = []
     after = re.compile(rules.get("course_word_after_alias", r"$^"), re.IGNORECASE)
     for alias, pdf in _alias_table(rules, course_names):
-        for m in re.finditer(rf"(?<![\w-]){re.escape(alias)}(?![\w-])", text):
+        for m in re.finditer(rf"(?<![\w-]){re.escape(alias)}(?![\w-])", question, re.IGNORECASE):
             if any(taken[m.start():m.end()]):
                 continue
             taken[m.start():m.end()] = [True] * (m.end() - m.start())
-            found.append((m.start(), pdf, bool(after.match(text, m.end()))))
+            word = after.match(question, m.end())
+            found.append((m.start(), word.end() if word else m.end(), pdf, bool(word)))
+    return sorted(found)
 
+
+def find_courses(question: str, rules: dict, course_names: Dict[str, str]) -> List[str]:
+    """Courses named in the question. Two only when it compares them, because a course title
+    or topic often names another course: "Does the Machine Learning course use Python?"."""
+    found = _course_mentions(question, rules, course_names)
     ordered: List[str] = []
-    for _, pdf, _ in sorted(found):
+    for _, _, pdf, _ in found:
         if pdf not in ordered:
             ordered.append(pdf)
     if len(ordered) < 2:
         return ordered
-    if any(re.search(p, text) for p in rules.get("compare_patterns", [])):
+    if any(re.search(p, question.lower()) for p in rules.get("compare_patterns", [])):
         return ordered
-    named_as_course = [pdf for _, pdf, followed in sorted(found) if followed]
+    second = re.search(rules.get("second_question_pattern", r"$^"), question, re.IGNORECASE)
+    if second and found[0][0] < second.start() < found[-1][0]:      # a course on each side of it
+        return ordered
+    named_as_course = [pdf for _, _, pdf, followed in found if followed]
     return [named_as_course[0] if named_as_course else ordered[0]]
+
+
+def mask_courses(question: str, courses: List[str], rules: dict, course_names: Dict[str, str]) -> Optional[str]:
+    """Replaces the routed course with "this course", so that a match with the example questions
+    depends on what is being asked, not on which course it is about. Only one mention per course
+    changes, and other names stay: in "Does the AWS course use AWS Lambda?" the second AWS is the
+    topic. Returns None if the name could just as well be the topic ("Is Python free?",
+    "a Java class"), which leaves the search broad."""
+    clear_word = re.compile(rules.get("clear_course_word", r"$^"), re.IGNORECASE)
+    chosen: Dict[str, Tuple[int, int, bool]] = {}
+    for start, end, pdf, _ in _course_mentions(question, rules, course_names):
+        lead = re.search(r"\b(the|this|that|my)\s+$", question[:start], re.IGNORECASE)
+        clear = bool(clear_word.search(question[start:end]))
+        if pdf in courses and (lead or clear) and (pdf not in chosen or (clear and not chosen[pdf][2])):
+            chosen[pdf] = (lead.start() if lead else start, end, clear)
+    if not chosen:
+        return None
+    for start, end, _ in sorted(chosen.values(), reverse=True):
+        question = question[:start] + "this course" + question[end:]
+    return question
+
+
+def _apply_intent(route: Route, intent: dict, matched_by: str) -> None:
+    route.intent = intent["name"]
+    route.chunk_types = intent["chunk_types"]
+    route.section = intent.get("section")
+    route.max_chunks = intent.get("max_chunks")
+    route.fetch_all = intent.get("fetch_all", False)
+    route.matched_by = matched_by
 
 
 def route_question(question: str, rules: dict, course_names: Dict[str, str]) -> Route:
     route = Route(courses=find_courses(question, rules, course_names))
     for intent in rules.get("intents", []):
-        if any(re.search(p, question, re.IGNORECASE) for p in intent["patterns"]):
-            route.intent = intent["name"]
-            route.chunk_types = intent["chunk_types"]
-            route.section = intent.get("section")
-            route.max_chunks = intent.get("max_chunks")
-            route.fetch_all = intent.get("fetch_all", False)
+        if any(re.search(p, question, re.IGNORECASE) for p in intent.get("patterns", [])):
+            _apply_intent(route, intent, "pattern")
             break
     return route
+
+
+class IntentMatcher:
+    """Finds a question's type by comparing it with the example questions in the rules.
+    "no_intent_examples" are broad questions: matching one of them keeps the search broad."""
+
+    def __init__(self, rules: dict, embed: Embedder, min_similarity: float, min_margin: float) -> None:
+        self.embed = embed
+        self.min_similarity = min_similarity
+        self.min_margin = min_margin
+        self.examples: List[Tuple[Optional[str], str]] = [
+            (intent["name"], text) for intent in rules.get("intents", []) for text in intent.get("examples", [])]
+        self.examples += [(None, text) for text in rules.get("no_intent_examples", [])]
+        self._vectors: Optional[List[List[float]]] = None        # embedded on first use
+
+    def match(self, question: str) -> Optional[str]:
+        if not self.examples:
+            return None
+        if self._vectors is None:
+            self._vectors = self.embed([text for _, text in self.examples])
+        vector = self.embed([question])[0]
+        best: Dict[Optional[str], float] = {}                    # vectors are normalised: dot = cosine
+        for (intent, _), example in zip(self.examples, self._vectors):
+            score = sum(a * b for a, b in zip(vector, example))
+            best[intent] = max(score, best.get(intent, -1.0))
+        ranked = sorted(best.items(), key=lambda item: -item[1])
+        winner, score = ranked[0]
+        runner_up = ranked[1][1] if len(ranked) > 1 else -1.0
+        if winner is None or score < self.min_similarity or score - runner_up < self.min_margin:
+            return None
+        return winner
 
 
 # ---- search ---------------------------------------------------------------------------
@@ -151,7 +226,8 @@ def _to_chunk(chunk_id: str, text: str, meta: dict, similarity: Optional[float])
 class Retriever:
     def __init__(self, collection, embed: Embedder, rules: Optional[dict] = None,
                  top_k: Optional[int] = None, min_similarity: Optional[float] = None,
-                 min_similarity_no_course: Optional[float] = None) -> None:
+                 min_similarity_no_course: Optional[float] = None, min_intent_similarity: Optional[float] = None,
+                 min_intent_margin: Optional[float] = None, use_examples: bool = True) -> None:
         self.collection = collection
         self.embed = embed
         self.rules = rules if rules is not None else load_rules()
@@ -159,6 +235,12 @@ class Retriever:
         self.min_similarity = config.RETRIEVAL_MIN_SIMILARITY if min_similarity is None else min_similarity
         self.min_similarity_no_course = (config.RETRIEVAL_MIN_SIMILARITY_NO_COURSE if min_similarity_no_course is None
                                          else min_similarity_no_course)
+        self.matcher: Optional[IntentMatcher] = None
+        if use_examples:
+            self.matcher = IntentMatcher(
+                self.rules, embed,
+                config.RETRIEVAL_MIN_INTENT_SIMILARITY if min_intent_similarity is None else min_intent_similarity,
+                config.RETRIEVAL_MIN_INTENT_MARGIN if min_intent_margin is None else min_intent_margin)
         stored = collection.get(include=["metadatas"])["metadatas"]
         self.course_names = {m["pdf_name"]: m["course_name"] for m in stored}
 
@@ -180,6 +262,15 @@ class Retriever:
             chunks = self._search(vector, build_filter(pdf, [], None), n)
         return chunks
 
+    def _match_examples(self, question: str, route: Route) -> None:
+        """Only for a question no pattern recognised that names a course."""
+        if not self.matcher or route.matched_by or not route.courses:
+            return
+        masked = mask_courses(question, route.courses, self.rules, self.course_names)
+        name = self.matcher.match(masked) if masked else None
+        if name:
+            _apply_intent(route, next(i for i in self.rules["intents"] if i["name"] == name), "example")
+
     def retrieve(self, question: str, top_k: Optional[int] = None) -> RetrievalResult:
         question = question.strip()
         if not question:
@@ -196,12 +287,18 @@ class Retriever:
             result.in_scope = False
             return result
 
+        self._match_examples(question, route)
         if route.fetch_all:
             if not route.courses:
                 result.needs_course = True
                 return result
             result.chunks = [c for pdf in route.courses for c in self._fetch_all(pdf, route.chunk_types)]
             if result.chunks:
+                if route.matched_by == "example":   # it may only sound like an outline request
+                    per_course = math.ceil(top_k / len(route.courses))
+                    seen = {c.chunk_id for c in result.chunks}
+                    found = [c for pdf in route.courses for c in self._search(vector, build_filter(pdf, [], None), per_course)]
+                    result.chunks += [c for c in found if c.chunk_id not in seen]
                 return result
 
         if route.max_chunks:                    # one fact per course: every course if none is named
@@ -228,7 +325,7 @@ def get_retriever() -> Retriever:
 
 def _show(result: RetrievalResult) -> None:
     r = result.route
-    print(f"\nCourse: {r.courses or 'not named'} | type: {r.intent} | best similarity: {result.best_similarity:.3f}")
+    print(f"\nCourse: {r.courses or 'not named'} | type: {r.intent}{' (by example)' if r.matched_by == 'example' else ''} | best similarity: {result.best_similarity:.3f}")
     if not result.in_scope:
         print("Out of scope: nothing in the course documents matches this question.")
     if result.needs_course:

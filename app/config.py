@@ -33,3 +33,7 @@ RETRIEVAL_MIN_SIMILARITY = float(os.getenv("RETRIEVAL_MIN_SIMILARITY", 0.30))
 # Stricter when no course is named. Measured on the dev questions: the highest off-topic score
 # was 0.409 and the lowest real one 0.482. Re-measure this with the real PDFs.
 RETRIEVAL_MIN_SIMILARITY_NO_COURSE = float(os.getenv("RETRIEVAL_MIN_SIMILARITY_NO_COURSE", 0.445))
+# A question no pattern recognises takes a type from the example questions only if its best
+# example scores at least this, and beats the next type by at least the margin.
+RETRIEVAL_MIN_INTENT_SIMILARITY = float(os.getenv("RETRIEVAL_MIN_INTENT_SIMILARITY", 0.55))
+RETRIEVAL_MIN_INTENT_MARGIN = float(os.getenv("RETRIEVAL_MIN_INTENT_MARGIN", 0.03))
