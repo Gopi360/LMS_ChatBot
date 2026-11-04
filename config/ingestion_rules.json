@@ -1,0 +1,70 @@
+{
+  "_comment": "All layout knowledge lives here, not in code. Add a pattern when a new kind of noise shows up in the ingestion report.",
+
+  "row_tolerance_pt": 3.0,
+  "page_margins": {"header_pt": 35, "footer_pt": 35, "repeat_ratio": 0.6, "min_pages": 3},
+
+  "heading_min_size": 10.5,
+  "unit_gap_ratio": 1.75,
+  "unit_gap_ratio_after_sentence": 1.5,
+
+  "headings": {
+    "what you'll learn": "learn",
+    "this course includes:": "includes",
+    "explore related topics": "related_topics",
+    "course content": "curriculum",
+    "requirements": "requirements",
+    "description": "description",
+    "who this course is for:": "audience",
+    "instructor": "instructor",
+    "instructors": "instructor",
+    "coding exercises": "ignore",
+    "purchase options": "ignore",
+    "reviews": "ignore",
+    "student feedback": "ignore",
+    "students also bought": "stop",
+    "frequently bought together": "stop",
+    "more courses by": "stop"
+  },
+  "udemy_required_headings": ["learn", "includes", "curriculum", "requirements", "description"],
+  "udemy_min_known_headings": 3,
+
+  "boilerplate_cells": [
+    {"pattern": "Start subscription", "note": "sticky subscribe button"},
+    {"pattern": "tart subscription", "note": "subscribe button clipped by page edge"},
+    {"pattern": "Preview", "note": "per-lecture preview tag"},
+    {"pattern": "Preview this course"},
+    {"pattern": "Show more", "note": "expand button"},
+    {"pattern": "Show less", "note": "collapse button"},
+    {"pattern": "Collapse all sections"},
+    {"pattern": "Expand all sections"},
+    {"pattern": "See a demo"},
+    {"pattern": "Learn more"},
+    {"pattern": "Add to interests"},
+    {"pattern": "Join [\\d,]+ ?(lakh|k|million)?\\+? learners on Personal Plan today", "note": "promo"},
+    {"pattern": ".*Diwali Dhamaka.*", "note": "sale banner"},
+    {"pattern": "\\d+ days? left.*", "note": "sale countdown"},
+    {"pattern": "Premium"},
+    {"pattern": "Access [\\d,]+\\+ top-rated courses with Udemy Personal Plan\\.", "note": "subscription promo"},
+    {"pattern": "Purchase options"},
+    {"pattern": "Subscribe and save"},
+    {"pattern": "From .{1,2}[\\d,.]+ .{1,2}[\\d,.]+ /month", "note": "subscription price"},
+    {"pattern": "Our subscribers don.t pay per course\\..*"},
+    {"pattern": "Get this course and many more in .*"},
+    {"pattern": "AI, Development, Business, Design & 50\\+ topics"},
+    {"pattern": "Cancel anytime"},
+    {"pattern": "This course includes our updated coding exercises so", "note": "coding-exercise promo"},
+    {"pattern": "you can practice your skills as you learn\\."},
+    {"pattern": "[,;|]", "note": "stray separator between link cells"}
+  ],
+
+  "artifact_fixes": [
+    {"if_cell": "tart subscription",
+     "strip_trailing_from_other_cells": "\\s+S$",
+     "note": "button text overlapped the end of a section title"}
+  ],
+
+  "title_cleanup": [
+    {"pattern": "^-+\\s*(.*?)\\s*-+$", "replace": "\\1", "note": "'--- Part 1: X ---' -> 'Part 1: X'"}
+  ]
+}
