@@ -18,3 +18,9 @@ CHUNK_OVERLAP_TOKENS = int(os.getenv("CHUNK_OVERLAP_TOKENS", 30))   # prose only
 
 # A page with fewer extracted characters than this is reported as "little or no text".
 LOW_TEXT_CHAR_THRESHOLD = int(os.getenv("LOW_TEXT_CHAR_THRESHOLD", 40))
+
+# --- Embeddings and vector database ---------------------------------------------------
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", 16))   # small: runs on a laptop CPU
+CHROMA_DIR = PROJECT_ROOT / os.getenv("CHROMA_DIR", "vector_db/chroma")
+CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "course_chunks")
