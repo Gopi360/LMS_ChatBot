@@ -81,6 +81,7 @@ class ExtractedDocument:
     rows: List[Row] = field(default_factory=list)          # header/footer already removed
     margin_rows_removed: List[str] = field(default_factory=list)
     captured_raw: Optional[str] = None                      # e.g. "11/3/26, 5:50 PM" from the page header
+    printed_total_pages: Optional[int] = None               # the "y" of an "x/y" page footer, if any
     errors: List[str] = field(default_factory=list)
 
     @property
@@ -152,9 +153,24 @@ def _signature(row: Row) -> str:
     return _signature_text(row.text)
 
 
-def _strip_margin_rows(rows_by_page: dict, heights: dict, cfg: dict) -> tuple[dict, List[str], Optional[str]]:
+def _printed_total(footers: List[str]) -> Optional[int]:
+    """Total page count printed in running footers such as "https://... 3/21". Browsers print
+    the total of the whole web page, so a total above the file's page count means pages were
+    left out when the PDF was saved. The total must agree on every footer, which keeps a stray
+    fraction or date from being read as a page count."""
+    totals = set()
+    for text in footers:
+        m = re.search(r"(?:^|\s)(\d{1,4})/(\d{1,4})$", text.strip())
+        if not m or int(m.group(1)) > int(m.group(2)):
+            return None
+        totals.add(int(m.group(2)))
+    return totals.pop() if len(totals) == 1 else None
+
+
+def _strip_margin_rows(rows_by_page: dict, heights: dict, cfg: dict) -> tuple[dict, List[str], Optional[str], Optional[int]]:
     """Remove running headers/footers: rows inside the top/bottom margin whose text (digits
-    ignored) repeats on most pages. Returns (rows_by_page, removed_samples, captured_raw)."""
+    ignored) repeats on most pages. Returns (rows_by_page, removed_samples, captured_raw,
+    printed_total_pages)."""
     header_pt, footer_pt = cfg.get("header_pt", 35), cfg.get("footer_pt", 35)
     ratio, min_pages = cfg.get("repeat_ratio", 0.6), cfg.get("min_pages", 3)
 
@@ -167,9 +183,10 @@ def _strip_margin_rows(rows_by_page: dict, heights: dict, cfg: dict) -> tuple[di
         counts.update({_signature(r) for r in rows if in_margin(r)})
 
     removed: List[str] = []
+    footers: List[str] = []
     captured = None
     if n_pages < min_pages:
-        return rows_by_page, removed, captured
+        return rows_by_page, removed, captured, None
     cleaned = {}
     for page_no, rows in rows_by_page.items():
         keep = []
@@ -177,13 +194,15 @@ def _strip_margin_rows(rows_by_page: dict, heights: dict, cfg: dict) -> tuple[di
             if in_margin(r) and counts[_signature(r)] >= ratio * n_pages:
                 if len(removed) < 6 and _signature(r) not in {_signature_text(x) for x in removed}:
                     removed.append(r.text)
+                if r.y > heights[r.page] - footer_pt:
+                    footers.append(r.text)
                 if captured is None:
                     m = re.search(r"\d{1,2}/\d{1,2}/\d{2,4},\s*\d{1,2}:\d{2}\s*[AP]M", r.text)
                     captured = m.group(0) if m else None
                 continue
             keep.append(r)
         cleaned[page_no] = keep
-    return cleaned, removed, captured
+    return cleaned, removed, captured, _printed_total(footers) if footers else None
 
 
 # ----------------------------------------------------------------------------------------
@@ -212,8 +231,8 @@ def extract_pdf(path: Path, rules: dict) -> ExtractedDocument:
         result.pages.append(info)
     doc.close()
 
-    rows_by_page, removed, captured = _strip_margin_rows(rows_by_page, heights, rules.get("page_margins", {}))
-    result.margin_rows_removed, result.captured_raw = removed, captured
+    rows_by_page, removed, captured, printed_total = _strip_margin_rows(rows_by_page, heights, rules.get("page_margins", {}))
+    result.margin_rows_removed, result.captured_raw, result.printed_total_pages = removed, captured, printed_total
 
     for info in result.pages:
         rows = rows_by_page[info.number]
