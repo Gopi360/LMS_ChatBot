@@ -1,8 +1,9 @@
-# LMS Course Chatbot – ingestion and index (Phases 1–3)
+# LMS Course Chatbot – ingestion, index and retrieval (Phases 1–4)
 
 Reads course PDFs **directly**, turns them into clean, retrieval-sized chunks with metadata, and stores them in a local
 ChromaDB index. No hand-made TXT files are needed: add a PDF, run the pipeline, read the report, run the indexer.
-The chatbot itself (retrieval, LLM, API) is not built yet; see `Latest_Plan.md`.
+Retrieval finds the right chunks for a question. Writing answers (LLM) and the REST API are not built yet; see `Latest_Plan.md`.
+This project is a backend only: the existing LMS provides the chat screen.
 
 ## Setup (Windows, Python 3.10+)
 ```
@@ -20,6 +21,9 @@ python -m app.ingestion.pipeline --only Python   # one PDF; the other courses st
 python -m app.ingestion.pdf_loader               # Phase-1 style page/character report
 python -m app.ingestion.indexer                  # update the index: only what changed
 python -m app.ingestion.indexer --rebuild        # delete the index and build it again
+python -m app.retrieval.retriever "How long is the Python course?"   # see what retrieval finds
+python -m app.retrieval.retriever                # interactive
+python -m evaluation.evaluate_retrieval          # retrieval score on the dev questions
 python -m evaluation.llm_speed_test              # measure answer time (needs Ollama running)
 python -m pytest tests -q                        # tests
 ```
@@ -39,11 +43,18 @@ Outputs
 | `pipeline.py` | runs everything, writes `chunks.json` and the report; a failing PDF never stops the others |
 | `indexer.py` | loads chunks into ChromaDB; skips unchanged courses and keeps the old chunks of a PDF that failed |
 | `retrieval/embeddings.py` | all-MiniLM-L6-v2 on the CPU, used for both chunks and questions |
+| `retrieval/retriever.py` | finds the course and question type, then searches only there; rejects off-topic questions |
 
 Chunking: two facts chunks (overview; duration/inclusions/price), learn/requirements/audience lists, description paragraphs
 (30-token overlap), one chunk per curriculum section plus a curriculum overview. Every chunk starts with `Course:` and `Section:`.
 Max chunk size is **220 estimated tokens** because `all-MiniLM-L6-v2` only reads the first 256 tokens of an input.
 Override with `CHUNK_MAX_TOKENS`, `CHUNK_OVERLAP_TOKENS` (see `app/config.py`).
+
+## Retrieval rules
+`config/retrieval_rules.json` holds course short names and question types. **When new PDFs arrive, update `courses`**, then
+re-measure: `python -m evaluation.evaluate_retrieval --scores`. Tune against `dev` only. Keep `held_out` for the final score.
+
+Latest held-out result: 24/30 course questions (plain search: 16/30) and 7/7 off-topic questions rejected.
 
 ## When a new PDF behaves badly
 1. Open `ingestion_report.md`: WARN lines say what to check.
@@ -54,6 +65,7 @@ Override with `CHUNK_MAX_TOKENS`, `CHUNK_OVERLAP_TOKENS` (see `app/config.py`).
 ## Known limits
 * `tokens_est` in the chunks is an estimate and runs low. The indexer prints real counts and warns above the model's limit of 256 (the demo maximum is 243).
 * All 5 demo PDFs are missing their last pages; the report shows how many. Save the full page to include them.
+* Retrieval depends on recognised wording. Unusual phrasing still reaches the right course but may miss the right chunk.
 * A course removed from `Courses/` stays in the index until `--rebuild`; the indexer warns about it.
 * Answers took about 1–2 minutes in a first test on the development laptop (i3, CPU only); see `Latest_Plan.md` section 6.
 * Three demo PDFs (Python, Machine Learning, Ethical Hacking) were saved with "What you'll learn" collapsed ("Show more"); the hidden items are not in those files. Export with the list expanded.

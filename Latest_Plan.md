@@ -11,7 +11,8 @@ Build a locally hosted AI chatbot that answers candidate questions about courses
 extracted from course PDF documents. It will later be integrated into an existing Learning Management
 System (LMS).
 
-- No frontend. Expose **REST API endpoints** the LMS can call.
+- **No frontend, decided.** The LMS already exists. We deliver the backend, its REST APIs and the project; the LMS team
+  connects it to their system (section 10).
 - Use **Retrieval-Augmented Generation (RAG)**: retrieve relevant chunks from the course PDFs, generate
   the answer with a **local LLM**.
 - The bot must answer **only** from the documents. No invented fees, durations, instructors,
@@ -47,9 +48,9 @@ Do not add libraries without a clear need.
 |---|---|
 | 1. PDF inspection and extraction | **Done** (built into `pdf_loader.py`) |
 | 2. Cleaning and chunking | **Done and tested** |
-| 3. Embeddings + ChromaDB | **Done and tested; awaiting user approval** |
-| 4. Retrieval | **Next** |
-| 5. LLM integration (RAG) | to do |
+| 3. Embeddings + ChromaDB | **Done and tested** |
+| 4. Retrieval | **Done and tested; awaiting user approval** |
+| 5. LLM integration (RAG) | **Next; needs the new laptop** |
 | 6. FastAPI backend | to do |
 | 7. Testing and evaluation | to do |
 
@@ -70,11 +71,14 @@ LMS_ChatBot/
       indexer.py                chunks.json -> ChromaDB; updates only what changed
     retrieval/
       embeddings.py             all-MiniLM-L6-v2 on CPU, shared by indexing and questions
+      retriever.py              routes a question by course and type, then searches; has a CLI
   config/ingestion_rules.json   boilerplate patterns, known headings, thresholds
+  config/retrieval_rules.json   course short names and question types
   data/extracted_text/*.txt     debug dumps with "--- PAGE n ---" (outputs, never edited by hand)
   data/processed/chunks.json    the input for the indexer
   data/processed/ingestion_report.md
   evaluation/llm_speed_test.py  measures answer time on this machine
+  evaluation/evaluate_retrieval.py + retrieval_questions.json   retrieval score, dev and held-out
   tests/                        run: python -m pytest tests -q
   vector_db/chroma/             the index (generated, not in git)
   requirements.txt              pinned to the tested versions
@@ -82,6 +86,7 @@ LMS_ChatBot/
 ```
 
 Run: `python -m app.ingestion.pipeline` (all PDFs) or `--only Java`, then `python -m app.ingestion.indexer`.
+Try a question: `python -m app.retrieval.retriever "How long is the Python course?"`
 
 ### The five demo courses (Udemy course pages saved as PDF, captured 2026-11-03)
 
@@ -155,17 +160,33 @@ Price: ₹459.00 (list price ₹3,199.00, 86% off). This is the price shown when
 - `tokens_est` runs low: the highest real count is 243 where the highest estimate is 219. The indexer prints real counts
   on every run and warns above 256. Watch this with the real PDFs, because the margin is only 13 tokens.
 - Scanned (image-only) PDFs need OCR; the report flags pages with no text.
-- **First retrieval check (6 questions, plain top 4; not a full test):** "Does the AWS course cover S3?" finds the right
-  section first, and "What is the capital of France?" scores about 0.09 while course questions score 0.46–0.80, so a
-  similarity cutoff looks workable. But "requirements for the Java course" misses the `requirements` chunk and "Who teaches
-  ethical hacking?" misses the `facts` chunk with the instructor. The course name in every chunk header seems to dominate
-  the match, so plain similarity returns the right course but the wrong kind of chunk. **Phase 4 must fix this**: filter by
-  course first, then match the question type to `chunk_type`.
 - All 5 demo PDFs are missing their last 6–9 pages (footers say 1/21, the file has 15 pages), which is probably why there
   are no `instructor` chunks. The report now warns about this. Questions about instructor backgrounds cannot be answered.
-- **Course routing risk (test in Phase 4):** the Machine Learning title contains "AWS, Python & R", and that title is in the
-  header of all 92 ML chunks. A plain name match on "Python" or "AWS" hits two courses, and embeddings may drift the same
-  way. Use a course alias list in config and test "Python course" and "AWS course" questions directly.
+
+### Measured retrieval quality (Phase 4, `evaluation/evaluate_retrieval.py`)
+
+Final score on questions never used for tuning. A pass means the right chunk was retrieved, not that an answer was written.
+
+| | Plain search | Routed retrieval |
+|---|---:|---:|
+| Course questions passed | 16/30 | **24/30 (80%)** |
+| Off-topic questions rejected | not applicable | **7/7** |
+| Average chunks per question | 4.0 | 2.8 |
+| Approx. context tokens, average | 538 | 364 |
+
+An earlier held-out set also scored 24/30, then joined the dev set after its failures were fixed. The dev set now passes
+60/60 and 10/10, but those questions were used for tuning, so that is not a quality figure.
+
+Known limits:
+- **Wording:** 5 of the 6 failures were phrasings the patterns do not recognise ("Who runs…", "goals of…", "help me achieve",
+  "What should I know before…"), and the sixth names two courses without a comparison word. These questions still reach the
+  right course but may miss the right chunk. Adding patterns one by one will not solve this. The better fix is to compare
+  each question with example questions by embedding, instead of regex patterns. Pros: handles new wording and reuses
+  the embedding model. Cons: needs a list of examples and a new measurement.
+- **The no-course cutoff is thin:** 0.445, with one real question at 0.448 in the final test. A cutoff set too high
+  rejects real questions, so re-measure it with the real PDFs.
+- **Aliases are per course:** `config/retrieval_rules.json` lists the 5 demo courses. The real PDFs need new entries, and
+  every score here must be measured again on them.
 
 ### Measured LLM speed (i3-1005G1, CPU only, `evaluation/llm_speed_test.py`)
 
@@ -184,8 +205,9 @@ of 11.8 GB, so close other apps during a demo.
 
 **Machine stability risk:** the development laptop restarted uncleanly 7 times between 2026-10-29 and 2026-11-04, including twice during a speed test. It also happened before this project used the LLM, so the cause is not proven. The stop codes (0x7A, 0x154) can point to paging, disk or memory faults, and Windows logged 2 bad-block errors. Do not rely on this laptop for the manager demo until that is checked.
 
-Ways to reduce this, to decide from Phase 4–5 tests: send fewer chunks, cap answers near 120 tokens, stream the answer so
-the first words appear sooner, keep the model loaded (`keep_alive`), or run the demo on a stronger machine.
+Routing already cut the average context from about 538 to 364 tokens. Further options, to decide from Phase 5 tests: cap
+answers near 120 tokens, stream the answer so the first words appear sooner, keep the model loaded (`keep_alive`), and run
+on the new laptop.
 
 ## 7. Remaining phases
 
@@ -241,7 +263,7 @@ the first words appear sooner, keep the model loaded (`keep_alive`), or run the 
 8. Deliverables: `llm.py`, `prompts.py`, working command-line chatbot. Test, then **stop for approval.**
 
 ### Phase 6: FastAPI backend
-Endpoints: `POST /api/v1/chat`, `GET /api/v1/health`, `POST /api/v1/ingest`.
+Endpoints: `POST /api/v1/chat`, `GET /api/v1/health`, `POST /api/v1/ingest`. Section 10 describes how the LMS connects.
 
 Chat request:
 ```json
@@ -259,7 +281,10 @@ Chat response:
   runs the Phase 2 pipeline, then re-indexes only changed PDFs, and returns the ingestion report summary.
   Ordinary students must not be able to modify the knowledge base.
 - `/health`: check Ollama reachable, the model present, Chroma collection count.
-- Handle errors with proper HTTP codes and logging; serialize LLM calls (one at a time); configurable CORS for the LMS.
+- Handle errors with proper HTTP codes and logging; serialize LLM calls (one at a time).
+- Use the retrieval flags: `in_scope=false` returns a fixed refusal with no LLM call (fast), and `needs_course=true` asks
+  the student which course they mean.
+- Optional `course` field on chat requests: when a student is on a course page, the LMS sends it and course detection is skipped.
 - Deliverables: `routes.py`, `main.py`, API documentation (FastAPI docs + README section). **Stop for approval.**
 
 ### Phase 7: Testing and evaluation
@@ -297,14 +322,36 @@ Mention the source document and page number whenever possible.
 7. Proper error handling and logging.
 8. **Do not move to the next phase until the current one is tested and the user approves.**
 
-## 10. Open decisions
+## 10. LMS integration
 
-1. **Re-save the 5 demo PDFs before the demo?** Recommended: yes. Restores the missing pages and collapsed lists.
-   Costs about 15 minutes, and adds nothing if the real PDFs arrive soon.
-2. **Add a small chat page for the demo?** Recommended: yes, one static page served by FastAPI in Phase 6. The manager gets
-   something real to try, instead of Swagger `/docs`. It is a small addition to a plan that says no frontend.
+We deliver a backend service. The LMS keeps its own chat screen and calls our API.
 
-## 11. Real PDFs later (production)
+```
+Student -> LMS web page -> LMS backend -> POST /api/v1/chat (with API key) -> our service -> Ollama + ChromaDB
+```
+
+**Recommended: the LMS backend calls our API, not the browser.** Pros: the API key stays secret, the LMS confirms who the
+student is, and CORS is not needed. Cons: the LMS team writes one small forwarding endpoint. Direct browser calls need no
+LMS backend work, but would expose the key and let anyone send a fake `student_id`.
+
+**Delivered to the LMS team:** the code, `.env.example`, a Dockerfile, the OpenAPI spec at `/docs`, sample requests and an
+integration guide.
+
+**To confirm with the LMS team:**
+1. LMS technology, and where it is hosted.
+2. Where our service will run. It needs a machine for Ollama, reachable from the LMS.
+3. Timeouts: answers take over a minute on weak hardware, so the LMS must wait long enough or use streaming.
+4. How many students may ask at once. LLM calls run one at a time, so a busy period forms a queue.
+5. Whether the LMS can send the current course with each request.
+6. Who uploads new PDFs, and how.
+
+## 11. Open decisions
+
+1. **Re-save the 5 demo PDFs?** Recommended: yes, unless the real PDFs arrive soon. It restores the missing pages and collapsed lists.
+2. **GitHub:** the repo is public and `data/processed/chunks.json` holds copied Udemy text. Either make the repo private,
+   or remove the generated data from history before pushing. Nothing is pushed yet.
+
+## 12. Real PDFs later (production)
 
 The real PDFs may not look like Udemy pages. After each upload: run the pipeline, read `ingestion_report.md`,
 fix with rules or a new adapter if needed. Don't change retrieval/LLM code for layout problems.
