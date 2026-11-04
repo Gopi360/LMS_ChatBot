@@ -26,9 +26,11 @@ class StubRetriever:
         self.course_names = COURSES
         self.result = result
         self.questions: List[str] = []
+        self.defaults: List[Optional[str]] = []
 
-    def retrieve(self, question: str) -> RetrievalResult:
+    def retrieve(self, question: str, default_course: Optional[str] = None) -> RetrievalResult:
         self.questions.append(question)
+        self.defaults.append(default_course)
         fields = {"route": Route(courses=[PY]), "chunks": [_chunk(1), _chunk(2)], **self.result}
         return RetrievalResult(question=question, **fields)
 
@@ -54,7 +56,18 @@ def test_an_answer_lists_only_the_sources_it_cited() -> None:
 
 def test_a_citation_that_matches_no_passage_is_ignored() -> None:
     reply = Chatbot(StubRetriever(), StubLLM("Fact [1] and fact [9].")).ask("Python?")
-    assert [s.number for s in reply.sources] == [1]
+    assert [s.number for s in reply.sources] == [1] and "[9]" not in reply.text and "[1]" in reply.text
+
+
+@pytest.mark.parametrize("text, numbers", [
+    ("Fact [1-2].", [1, 2]),
+    ("Fact [2; 1].", [2, 1]),
+    ("Fact [ 2 ].", [2]),
+    ("Fact [Passage 1].", [1]),
+    ("Fact [1-999999999].", [1, 2]),
+])
+def test_common_citation_styles_are_understood(text: str, numbers: List[int]) -> None:
+    assert [s.number for s in Chatbot(StubRetriever(), StubLLM(text)).ask("Python?").sources] == numbers
 
 
 def test_several_numbers_in_one_citation_are_all_read() -> None:
@@ -70,6 +83,11 @@ def test_an_answer_with_no_valid_citation_is_not_shown() -> None:
 def test_the_model_can_say_the_documents_do_not_have_the_answer() -> None:
     reply = Chatbot(StubRetriever(), StubLLM(NOT_FOUND_MARK)).ask("Is there a refund?")
     assert reply.status == "not_found" and NOT_FOUND_MARK not in reply.text
+
+
+def test_a_good_answer_survives_a_stray_not_found_mark() -> None:
+    reply = Chatbot(StubRetriever(), StubLLM(f"It takes 22 hours [1]. {NOT_FOUND_MARK}")).ask("How long?")
+    assert reply.status == "answered" and NOT_FOUND_MARK not in reply.text
 
 
 def test_an_off_topic_question_never_reaches_the_llm() -> None:
@@ -100,28 +118,75 @@ def test_an_empty_or_oversized_question_is_an_error(question: str) -> None:
         Chatbot(StubRetriever(), StubLLM(), max_question_chars=500).ask(question)
 
 
-def test_a_follow_up_keeps_the_course_from_the_last_answer() -> None:
+def test_the_last_course_is_offered_to_retrieval_for_the_next_question() -> None:
     retriever = StubRetriever()
     bot = Chatbot(retriever, StubLLM())
     bot.ask("How long is the Python course?")
     bot.ask("How much does it cost?")
-    assert COURSES[PY] in retriever.questions[-1]
+    assert retriever.defaults == [None, PY]
 
 
-def test_a_new_question_without_a_pronoun_is_left_alone() -> None:
+def test_the_question_is_never_rewritten() -> None:
     retriever = StubRetriever()
     bot = Chatbot(retriever, StubLLM())
     bot.ask("How long is the Python course?")
+    reply = bot.ask("How much does it cost?")
+    assert retriever.questions[-1] == "How much does it cost?" and reply.question == "How much does it cost?"
+
+
+def test_a_course_is_remembered_even_when_the_documents_had_no_answer() -> None:
+    retriever = StubRetriever(route=Route(courses=[JAVA]))
+    bot = Chatbot(retriever, StubLLM(NOT_FOUND_MARK))
+    bot.ask("Is there a refund for the Java course?")
+    bot.ask("How much does it cost?")
+    assert retriever.defaults[-1] == JAVA
+
+
+def test_a_question_with_no_course_does_not_forget_the_course() -> None:
+    retriever = StubRetriever()
+    bot = Chatbot(retriever, StubLLM())
+    bot.ask("How long is the Python course?")
+    retriever.result["route"] = Route(courses=[])
     bot.ask("Which courses give a certificate?")
-    assert retriever.questions[-1] == "Which courses give a certificate?"
+    bot.ask("Who teaches it?")
+    assert retriever.defaults[-1] == PY
 
 
-def test_a_question_naming_a_course_is_not_treated_as_a_follow_up() -> None:
+def test_an_off_topic_question_does_not_change_the_course() -> None:
     retriever = StubRetriever()
     bot = Chatbot(retriever, StubLLM())
     bot.ask("How long is the Python course?")
-    bot.ask("Who teaches it in the Java course?")
-    assert retriever.questions[-1] == "Who teaches it in the Java course?"
+    retriever.result.update(route=Route(courses=[JAVA]), in_scope=False, chunks=[])
+    bot.ask("best beaches in java")
+    bot.ask("Who teaches it?")
+    assert retriever.defaults[-1] == PY
+
+
+def test_after_a_comparison_no_single_course_is_assumed() -> None:
+    retriever = StubRetriever(route=Route(courses=[PY, JAVA]))
+    bot = Chatbot(retriever, StubLLM())
+    bot.ask("Compare Python and Java")
+    bot.ask("Who teaches it?")
+    assert retriever.defaults[-1] is None
+
+
+def test_naming_a_course_answers_which_course_do_you_mean() -> None:
+    retriever = StubRetriever(needs_course=True, chunks=[])
+    bot = Chatbot(retriever, StubLLM())
+    bot.ask("List all sections")
+    retriever.result.update(needs_course=False, chunks=[_chunk(1)])
+    bot.ask("python")
+    assert "List all sections" in retriever.questions[-1] and "python" in retriever.questions[-1]
+
+
+def test_a_new_question_replaces_the_one_waiting_for_a_course() -> None:
+    retriever = StubRetriever(needs_course=True, chunks=[])
+    bot = Chatbot(retriever, StubLLM())
+    bot.ask("List all sections")
+    retriever.result.update(needs_course=False, chunks=[_chunk(1)])
+    bot.ask("What is the weather?")
+    bot.ask("python")
+    assert retriever.questions[-1] == "python"
 
 
 def test_the_prompt_numbers_passages_and_names_their_source() -> None:
@@ -133,11 +198,22 @@ def test_the_system_prompt_treats_passages_as_data() -> None:
     assert NOT_FOUND_MARK in SYSTEM_PROMPT and "instructions" in SYSTEM_PROMPT.lower()
 
 
+def test_the_system_prompt_covers_shared_words_and_the_saved_date() -> None:
+    assert "shares a word" in SYSTEM_PROMPT and "saved" in SYSTEM_PROMPT and "date" in SYSTEM_PROMPT
+
+
 def test_rehearsal_flags_a_question_with_the_wrong_outcome() -> None:
     rows = rehearse(Chatbot(StubRetriever(), StubLLM()),
                     [{"q": "How long is Python?", "expect": "answered"}, {"q": "Is it free?", "expect": "not_found"}],
                     pause=0, sleep=lambda _: None)
     assert [r["ok"] for r in rows] == [True, False]
+
+
+def test_rehearsal_reports_each_row_as_it_finishes() -> None:
+    seen: List[str] = []
+    rehearse(Chatbot(StubRetriever(), StubLLM()), [{"q": "a", "expect": "answered"}], pause=0, sleep=lambda _: None,
+             on_row=lambda row: seen.append(row["q"]))
+    assert seen == ["a"]
 
 
 def test_rehearsal_waits_between_questions_only() -> None:

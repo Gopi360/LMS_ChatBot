@@ -1,12 +1,13 @@
 """The Gemini wrapper: what it sends, and how it reports each kind of failure."""
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from typing import Any, Optional
 
 import httpx
 import pytest
-from google.genai import errors
+from google.genai import errors, types
 
 from app import config
 from app.generation.llm import GeminiGenerator, LLMError, get_generator
@@ -15,16 +16,18 @@ SECRET = "not-a-real-key-123"
 
 
 class FakeModels:
-    def __init__(self, text: Optional[str] = "An answer [1].", error: Optional[Exception] = None) -> None:
+    def __init__(self, text: Optional[str] = "An answer [1].", error: Optional[Exception] = None,
+                 finish: Any = "STOP") -> None:
         self.text = text
         self.error = error
+        self.finish = finish
         self.request: dict = {}
 
     def generate_content(self, **request: Any) -> SimpleNamespace:
         self.request = request
         if self.error:
             raise self.error
-        return SimpleNamespace(text=self.text, candidates=[SimpleNamespace(finish_reason="STOP")])
+        return SimpleNamespace(text=self.text, candidates=[SimpleNamespace(finish_reason=self.finish)])
 
 
 def _generator(models: FakeModels) -> GeminiGenerator:
@@ -51,6 +54,9 @@ def test_the_request_carries_the_model_rules_and_low_randomness() -> None:
     (errors.ServerError(503, {"error": {"message": "overloaded"}}), "busy"),
     (httpx.ConnectError("no network"), "internet"),
     (httpx.ReadTimeout("slow"), "internet"),
+    (errors.APIError(302, {"error": {"message": "moved"}}), "Gemini"),
+    (json.JSONDecodeError("not json", "<html>", 0), "Gemini"),
+    (UnicodeEncodeError("ascii", "x", 0, 1, "bad"), "Gemini"),
 ])
 def test_each_failure_gets_a_clear_message(error: Exception, phrase: str) -> None:
     with pytest.raises(LLMError, match=phrase):
@@ -61,6 +67,16 @@ def test_each_failure_gets_a_clear_message(error: Exception, phrase: str) -> Non
 def test_an_empty_reply_is_a_failure(text: Optional[str]) -> None:
     with pytest.raises(LLMError):
         _generator(FakeModels(text))("system", "prompt")
+
+
+@pytest.mark.parametrize("finish", ["MAX_TOKENS", "RECITATION", types.FinishReason.MAX_TOKENS])
+def test_a_reply_that_stopped_early_is_a_failure(finish: Any) -> None:
+    with pytest.raises(LLMError, match="cut short"):
+        _generator(FakeModels("Half an answer [1] and", finish=finish))("system", "prompt")
+
+
+def test_a_normal_finish_from_the_real_enum_is_fine() -> None:
+    assert _generator(FakeModels(finish=types.FinishReason.STOP))("system", "prompt") == "An answer [1]."
 
 
 def test_the_key_never_appears_in_an_error() -> None:

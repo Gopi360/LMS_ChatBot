@@ -51,6 +51,7 @@ class Route:
     max_chunks: Optional[int] = None
     fetch_all: bool = False
     matched_by: Optional[str] = None                     # "pattern", "example", or None for general
+    follow_up: bool = False                              # the course comes from the conversation
 
 
 @dataclass
@@ -133,6 +134,21 @@ def find_courses(question: str, rules: dict, course_names: Dict[str, str]) -> Li
     return [named_as_course[0] if named_as_course else ordered[0]]
 
 
+def is_follow_up(question: str, rules: dict, course_names: Dict[str, str]) -> bool:
+    """Does this question continue with the course already being discussed? Not if it asks about
+    courses in general or clearly names a course. A bare name after "it" is the topic:
+    in "Does it use Python?" the course is still the one being discussed."""
+    if re.search(rules.get("catalogue_pattern", r"$^"), question, re.IGNORECASE):
+        return False
+    mentions = _course_mentions(question, rules, course_names)
+    if not mentions:
+        return True
+    clear_word = re.compile(rules.get("clear_course_word", r"$^"), re.IGNORECASE)
+    if any(clear_word.search(question[start:end]) for start, end, _, _ in mentions):
+        return False
+    return bool(re.search(rules.get("follow_up_pattern", r"$^"), question, re.IGNORECASE))
+
+
 def mask_courses(question: str, courses: List[str], rules: dict, course_names: Dict[str, str]) -> Optional[str]:
     """Replaces the routed course with "this course", so that a match with the example questions
     depends on what is being asked, not on which course it is about. Only one mention per course
@@ -184,17 +200,27 @@ class IntentMatcher:
         self.examples += [(None, text) for text in rules.get("no_intent_examples", [])]
         self._vectors: Optional[List[List[float]]] = None        # embedded on first use
 
-    def match(self, question: str) -> Optional[str]:
-        if not self.examples:
-            return None
+    def _scores(self, question: str) -> Dict[Optional[str], float]:
+        """The best example score per question type. Vectors are normalised, so dot = cosine."""
         if self._vectors is None:
             self._vectors = self.embed([text for _, text in self.examples])
         vector = self.embed([question])[0]
-        best: Dict[Optional[str], float] = {}                    # vectors are normalised: dot = cosine
+        best: Dict[Optional[str], float] = {}
         for (intent, _), example in zip(self.examples, self._vectors):
             score = sum(a * b for a, b in zip(vector, example))
             best[intent] = max(score, best.get(intent, -1.0))
-        ranked = sorted(best.items(), key=lambda item: -item[1])
+        return best
+
+    def best_score(self, question: str) -> float:
+        """How much the question sounds like any course question."""
+        if not self.examples:
+            return -1.0
+        return max((score for intent, score in self._scores(question).items() if intent), default=-1.0)
+
+    def match(self, question: str) -> Optional[str]:
+        if not self.examples:
+            return None
+        ranked = sorted(self._scores(question).items(), key=lambda item: -item[1])
         winner, score = ranked[0]
         runner_up = ranked[1][1] if len(ranked) > 1 else -1.0
         if winner is None or score < self.min_similarity or score - runner_up < self.min_margin:
@@ -227,7 +253,8 @@ class Retriever:
     def __init__(self, collection, embed: Embedder, rules: Optional[dict] = None,
                  top_k: Optional[int] = None, min_similarity: Optional[float] = None,
                  min_similarity_no_course: Optional[float] = None, min_intent_similarity: Optional[float] = None,
-                 min_intent_margin: Optional[float] = None, use_examples: bool = True) -> None:
+                 min_intent_margin: Optional[float] = None, use_examples: bool = True,
+                 min_similarity_follow_up: Optional[float] = None) -> None:
         self.collection = collection
         self.embed = embed
         self.rules = rules if rules is not None else load_rules()
@@ -235,6 +262,8 @@ class Retriever:
         self.min_similarity = config.RETRIEVAL_MIN_SIMILARITY if min_similarity is None else min_similarity
         self.min_similarity_no_course = (config.RETRIEVAL_MIN_SIMILARITY_NO_COURSE if min_similarity_no_course is None
                                          else min_similarity_no_course)
+        self.min_similarity_follow_up = (config.RETRIEVAL_MIN_SIMILARITY_FOLLOW_UP if min_similarity_follow_up is None
+                                         else min_similarity_follow_up)
         self.matcher: Optional[IntentMatcher] = None
         if use_examples:
             self.matcher = IntentMatcher(
@@ -262,21 +291,40 @@ class Retriever:
             chunks = self._search(vector, build_filter(pdf, [], None), n)
         return chunks
 
+    def _follow_up_in_scope(self, question: str, similarity: float) -> bool:
+        """Follow-ups are short, so they score low against course text even when they are real.
+        One passes if it matches the text, sounds like a course question, or is so short that
+        "it" can only mean the course ("Who made it?"). Otherwise it is off-topic chat."""
+        if similarity >= self.min_similarity_follow_up:
+            return True
+        pronoun = re.search(self.rules.get("follow_up_pattern", r"$^"), question, re.IGNORECASE)
+        if pronoun and len(question.split()) <= config.RETRIEVAL_FOLLOW_UP_MAX_WORDS:
+            return True
+        return bool(self.matcher) and self.matcher.best_score(question) >= config.RETRIEVAL_FOLLOW_UP_MIN_EXAMPLE
+
     def _match_examples(self, question: str, route: Route) -> None:
         """Only for a question no pattern recognised that names a course."""
         if not self.matcher or route.matched_by or not route.courses:
             return
         masked = mask_courses(question, route.courses, self.rules, self.course_names)
+        if masked is None and route.follow_up:
+            masked = question
         name = self.matcher.match(masked) if masked else None
         if name:
             _apply_intent(route, next(i for i in self.rules["intents"] if i["name"] == name), "example")
 
-    def retrieve(self, question: str, top_k: Optional[int] = None) -> RetrievalResult:
+    def retrieve(self, question: str, top_k: Optional[int] = None,
+                 default_course: Optional[str] = None) -> RetrievalResult:
+        """`default_course` is the course being discussed. It only filters the search: the question
+        is scored in the student's own words, so it cannot lift an off-topic question into scope."""
         question = question.strip()
         if not question:
             raise ValueError("The question is empty.")
         top_k = top_k or self.top_k
         route = route_question(question, self.rules, self.course_names)
+        if default_course and is_follow_up(question, self.rules, self.course_names):
+            route.courses = [default_course]
+            route.follow_up = True
         result = RetrievalResult(question=question, route=route)
         if route.fetch_all and not route.courses:   # short, so it can score below the cutoff
             result.needs_course = True
@@ -285,9 +333,12 @@ class Retriever:
         vector = self.embed([question])[0]
         best = self._search(vector, None, 1)
         result.best_similarity = best[0].similarity if best else 0.0
-        cutoff = self.min_similarity if route.courses else self.min_similarity_no_course
-        if result.best_similarity < cutoff:
-            result.in_scope = False
+        if route.follow_up:
+            result.in_scope = self._follow_up_in_scope(question, result.best_similarity)
+        else:
+            cutoff = self.min_similarity if route.courses else self.min_similarity_no_course
+            result.in_scope = result.best_similarity >= cutoff
+        if not result.in_scope:
             return result
 
         self._match_examples(question, route)

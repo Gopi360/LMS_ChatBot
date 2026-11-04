@@ -12,9 +12,10 @@ from __future__ import annotations
 import argparse
 import logging
 import re
+import sys
 import time
 from dataclasses import asdict, dataclass, field
-from typing import Any, List, Optional
+from typing import Any, List, Match, Optional, Tuple
 
 from app import config
 from app.generation.llm import Generator, LLMError, get_generator
@@ -48,14 +49,21 @@ class ChatReply:
         return asdict(self)
 
 
-def _cited_numbers(text: str, passage_count: int) -> List[int]:
-    """Passage numbers cited as [1] or [1, 2], in order of first use. Unknown numbers are dropped."""
+def _read_citations(text: str, passage_count: int) -> Tuple[str, List[int]]:
+    """The text without citations of passages that do not exist, and the valid passage numbers
+    in order of first use. Understands [1], [1, 2], [1; 2], [1-3] and [Passage 1]."""
     numbers: List[int] = []
-    for group in re.findall(r"\[(\d+(?:\s*,\s*\d+)*)\]", text):
-        for number in (int(n) for n in group.split(",")):
-            if 1 <= number <= passage_count and number not in numbers:
-                numbers.append(number)
-    return numbers
+
+    def keep_valid(match: Match[str]) -> str:
+        valid: List[int] = []
+        for part in re.split(r"[,;]", match.group(1)):
+            ends = [int(n) for n in re.split(r"[-–]", part)]
+            valid += [n for n in range(ends[0], min(ends[-1], passage_count) + 1) if n >= 1]
+        numbers.extend(n for n in valid if n not in numbers)
+        return "".join(f"[{n}]" for n in valid)
+
+    cleaned = re.sub(r"\[\s*(?:passages?\s*)?(\d+(?:\s*[,;\-–]\s*\d+)*)\s*\]", keep_valid, text, flags=re.IGNORECASE)
+    return re.sub(r"[ \t]+([.,;])", r"\1", cleaned), numbers
 
 
 def _source(number: int, chunk: RetrievedChunk) -> Source:
@@ -68,16 +76,8 @@ class Chatbot:
         self.retriever = retriever
         self.generate = generate
         self.max_question_chars = max_question_chars or config.MAX_QUESTION_CHARS
-        self.last_courses: List[str] = []
-
-    def _with_course(self, question: str) -> str:
-        """"How much does it cost?" means the course just discussed. One course only: after a
-        comparison, "it" is unclear, so the question is left as it is."""
-        rules, names = self.retriever.rules, self.retriever.course_names
-        pronoun = re.search(rules.get("follow_up_pattern", r"$^"), question, re.IGNORECASE)
-        if not pronoun or len(self.last_courses) != 1 or find_courses(question, rules, names):
-            return question
-        return f"{question} (about the {names[self.last_courses[0]]} course)"
+        self.last_courses: List[str] = []        # the course being discussed
+        self.pending: Optional[str] = None        # a question waiting for "which course?"
 
     def ask(self, question: str) -> ChatReply:
         question = question.strip()
@@ -86,11 +86,18 @@ class Chatbot:
         if len(question) > self.max_question_chars:
             raise ValueError(f"The question is too long. The limit is {self.max_question_chars} characters.")
 
-        question = self._with_course(question)
-        result = self.retriever.retrieve(question)
+        pending, self.pending = self.pending, None
+        if pending and find_courses(question, self.retriever.rules, self.retriever.course_names):
+            question = f"{pending} ({question})"
+
+        default_course = self.last_courses[0] if len(self.last_courses) == 1 else None
+        result = self.retriever.retrieve(question, default_course=default_course)
+        if result.in_scope and result.route.courses:
+            self.last_courses = result.route.courses
         if not result.in_scope:
             return ChatReply(question, "out_of_scope", OUT_OF_SCOPE_REPLY)
         if result.needs_course:
+            self.pending = question
             names = "\n".join(f"- {name}" for name in sorted(self.retriever.course_names.values()))
             return ChatReply(question, "needs_course", f"Which course do you mean?\n{names}")
         if not result.chunks:
@@ -100,14 +107,12 @@ class Chatbot:
             text = self.generate(SYSTEM_PROMPT, build_prompt(question, result.chunks))
         except LLMError as exc:
             return ChatReply(question, "unavailable", str(exc))
-        if NOT_FOUND_MARK in text:
+        text, cited = _read_citations(text.replace(NOT_FOUND_MARK, "").strip(), len(result.chunks))
+        if not text:
             return ChatReply(question, "not_found", NOT_FOUND_REPLY)
-        cited = _cited_numbers(text, len(result.chunks))
         if not cited:
             log.warning("An answer with no valid citation was not shown: %s", question)
             return ChatReply(question, "not_found", NOT_FOUND_REPLY)
-
-        self.last_courses = result.route.courses
         return ChatReply(question, "answered", text, [_source(n, result.chunks[n - 1]) for n in cited])
 
 
@@ -127,6 +132,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("question", nargs="?", help="leave out for interactive mode")
     args = ap.parse_args()
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")     # prices use the rupee sign
     logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     try:
         bot = get_chatbot()
@@ -136,9 +142,11 @@ def main() -> None:
     def answer(question: str) -> None:
         started = time.perf_counter()
         try:
-            _show(bot.ask(question), time.perf_counter() - started)
+            reply = bot.ask(question)
         except ValueError as exc:
             print(exc)
+            return
+        _show(reply, time.perf_counter() - started)
 
     if args.question:
         answer(args.question)

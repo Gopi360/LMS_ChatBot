@@ -16,7 +16,8 @@
 
   "course_word_after_alias": "\\s+((programming|coding|online)\\s+)?(courses?|bootcamp|masterclass|class|program|programme|training)\\b",
   "clear_course_word": "\\b(courses?|bootcamp|masterclass|training)\\b",
-  "follow_up_pattern": "\\b(it|its|this|that|they|them)\\b",
+  "follow_up_pattern": "\\b(it|its|this|they|them)\\b",
+  "catalogue_pattern": "\\bcourses\\b|\\b(which|what|any|every|a|another)\\s+course\\b",
   "second_question_pattern": "\\band (who|what|how|which)\\b",
 
   "compare_patterns": ["\\bcompare\\b", "\\bcomparison\\b", "\\bvs\\.?\\b", "\\bversus\\b", "\\bdifference\\b",

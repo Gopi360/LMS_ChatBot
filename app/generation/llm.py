@@ -11,7 +11,6 @@ import logging
 from typing import Any, Callable, Optional
 
 import httpx
-import httpx2
 from google import genai
 from google.genai import errors, types
 
@@ -20,7 +19,7 @@ from app import config
 log = logging.getLogger(__name__)
 
 Generator = Callable[[str, str], str]
-NETWORK_ERRORS = (httpx.TransportError, httpx2.TransportError, ConnectionError, TimeoutError)
+NETWORK_ERRORS = (httpx.TransportError, ConnectionError, TimeoutError)
 
 
 class LLMError(RuntimeError):
@@ -32,7 +31,7 @@ class GeminiGenerator:
         self.model = model
         self.client = client or genai.Client(api_key=api_key, http_options=types.HttpOptions(
             timeout=config.LLM_TIMEOUT_SECONDS * 1000,                      # milliseconds
-            retry_options=types.HttpRetryOptions(attempts=3, http_status_codes=[500, 502, 503, 504])))
+            retry_options=types.HttpRetryOptions(attempts=2, http_status_codes=[500, 502, 503, 504])))
 
     def __call__(self, system: str, prompt: str) -> str:
         request = types.GenerateContentConfig(
@@ -49,14 +48,19 @@ class GeminiGenerator:
         except NETWORK_ERRORS as exc:
             log.error("Could not reach Gemini: %s", type(exc).__name__)
             raise LLMError("Could not reach Gemini. Check the internet connection and try again.") from None
+        except Exception as exc:        # the SDK has other failures: a proxy page, an odd status, a bad key
+            log.error("Gemini call failed: %s", type(exc).__name__)
+            raise LLMError("Gemini could not answer right now. Please try again.") from None
 
         text = (response.text or "").strip()
-        reason = str(response.candidates[0].finish_reason) if response.candidates else "no candidates"
+        reason = response.candidates[0].finish_reason if response.candidates else None
+        reason = getattr(reason, "name", reason)
         if not text:
             log.error("Gemini returned no text: %s", reason)
             raise LLMError("Gemini returned no answer. Please try again.")
-        if "MAX_TOKENS" in reason:
-            log.warning("The answer was cut off at %s tokens", config.LLM_MAX_OUTPUT_TOKENS)
+        if reason not in (None, "STOP"):
+            log.error("Gemini stopped early: %s", reason)
+            raise LLMError("The answer was cut short. Please ask about a smaller part of the course.")
         return text
 
 

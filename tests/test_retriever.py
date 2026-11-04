@@ -307,3 +307,69 @@ def test_an_intent_with_missing_fields_is_rejected_when_the_rules_load(tmp_path)
     path.write_text('{"intents": [{"name": "custom", "examples": ["x"]}]}', encoding="utf-8")
     with pytest.raises(ValueError, match="custom"):
         load_rules(path)
+
+
+# ---- follow-up questions --------------------------------------------------------------
+def _loose(retriever: Retriever, follow_up_cutoff: float = 0.05) -> Retriever:
+    return Retriever(retriever.collection, fake_embed, RULES, top_k=4, min_similarity=0.05, min_similarity_no_course=0.05,
+                     min_similarity_follow_up=follow_up_cutoff)
+
+
+def test_a_question_with_no_course_uses_the_remembered_one(retriever: Retriever) -> None:
+    result = _loose(retriever).retrieve("what is the duration length price", default_course=PY)
+    assert result.route.courses == [PY] and {c.document for c in result.chunks} == {PY}
+
+
+def test_a_remembered_course_never_rescues_an_off_topic_question(retriever: Retriever) -> None:
+    result = _loose(retriever, follow_up_cutoff=0.99).retrieve("is it going to rain today", default_course=PY)
+    assert not result.in_scope and result.chunks == []
+
+
+def test_the_course_title_is_not_read_as_part_of_the_question(retriever: Retriever) -> None:
+    """The Java title contains "Hours", which must not make this a duration question."""
+    assert _loose(retriever).retrieve("who is it for", default_course=JAVA).route.intent == "audience"
+
+
+@pytest.mark.parametrize("question", ["which courses have a duration", "is there a course that covers decorators",
+                                      "do you have any course on price"])
+def test_a_question_about_all_courses_ignores_the_remembered_one(retriever: Retriever, question: str) -> None:
+    assert _loose(retriever).retrieve(question, default_course=PY).route.courses == []
+
+
+def test_a_course_name_after_it_is_the_topic(retriever: Retriever) -> None:
+    assert _loose(retriever).retrieve("does it use java", default_course=PY).route.courses == [PY]
+
+
+@pytest.mark.parametrize("question", ["what about the java course", "what about java", "does it compare to the java course"])
+def test_naming_another_course_moves_on(retriever: Retriever, question: str) -> None:
+    assert _loose(retriever).retrieve(question, default_course=PY).route.courses == [JAVA]
+
+
+def test_a_follow_up_can_match_the_example_questions(retriever: Retriever) -> None:
+    rules = {**RULES, "intents": [{"name": "requirements", "chunk_types": ["requirements"], "max_chunks": 2, "patterns": [],
+                                   "examples": ["what must i bring for it"]}]}
+    r = Retriever(retriever.collection, fake_embed, rules, top_k=4, min_similarity=0.05, min_similarity_no_course=0.05,
+                  min_similarity_follow_up=0.05, min_intent_similarity=0.5, min_intent_margin=0.0)
+    assert r.retrieve("what must i bring for it", default_course=PY).route.intent == "requirements"
+
+
+def test_a_short_question_with_it_counts_as_being_about_the_course(retriever: Retriever) -> None:
+    assert _loose(retriever, follow_up_cutoff=0.99).retrieve("who made it", default_course=PY).in_scope
+
+
+def test_a_long_question_with_it_needs_a_real_match(retriever: Retriever) -> None:
+    r = Retriever(retriever.collection, fake_embed, RULES, top_k=4, min_similarity=0.05, min_similarity_no_course=0.05,
+                  min_similarity_follow_up=0.99, use_examples=False)
+    assert not r.retrieve("what is the capital of france and is it big", default_course=PY).in_scope
+
+
+def test_a_short_question_without_a_pronoun_needs_a_real_match(retriever: Retriever) -> None:
+    assert not _loose(retriever, follow_up_cutoff=0.99).retrieve("tell me a joke", default_course=PY).in_scope
+
+
+def test_a_follow_up_matching_an_example_is_in_scope(retriever: Retriever) -> None:
+    question = "what do i have to bring along for the whole thing"
+    rules = {**RULES, "intents": [{"name": "requirements", "chunk_types": ["requirements"], "patterns": [], "examples": [question]}]}
+    r = Retriever(retriever.collection, fake_embed, rules, top_k=4, min_similarity=0.05, min_similarity_no_course=0.05,
+                  min_similarity_follow_up=0.99)
+    assert r.retrieve(question, default_course=PY).in_scope
