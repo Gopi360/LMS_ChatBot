@@ -179,6 +179,15 @@ def test_naming_a_course_answers_which_course_do_you_mean() -> None:
     assert "List all sections" in retriever.questions[-1] and "python" in retriever.questions[-1]
 
 
+def test_a_full_question_naming_a_course_is_not_the_answer_to_which_course() -> None:
+    retriever = StubRetriever(needs_course=True, chunks=[])
+    bot = Chatbot(retriever, StubLLM())
+    bot.ask("List all sections")
+    retriever.result.update(needs_course=False, chunks=[_chunk(1)])
+    bot.ask("Is there a refund policy for the Python course?")
+    assert retriever.questions[-1] == "Is there a refund policy for the Python course?"
+
+
 def test_a_new_question_replaces_the_one_waiting_for_a_course() -> None:
     retriever = StubRetriever(needs_course=True, chunks=[])
     bot = Chatbot(retriever, StubLLM())

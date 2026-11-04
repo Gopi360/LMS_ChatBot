@@ -87,7 +87,8 @@ class Chatbot:
             raise ValueError(f"The question is too long. The limit is {self.max_question_chars} characters.")
 
         pending, self.pending = self.pending, None
-        if pending and find_courses(question, self.retriever.rules, self.retriever.course_names):
+        is_short_reply = len(question.split()) <= 4              # "the python one", not a new question
+        if pending and is_short_reply and find_courses(question, self.retriever.rules, self.retriever.course_names):
             question = f"{pending} ({question})"
 
         default_course = self.last_courses[0] if len(self.last_courses) == 1 else None
