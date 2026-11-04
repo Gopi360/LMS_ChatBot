@@ -278,6 +278,9 @@ class Retriever:
         top_k = top_k or self.top_k
         route = route_question(question, self.rules, self.course_names)
         result = RetrievalResult(question=question, route=route)
+        if route.fetch_all and not route.courses:   # short, so it can score below the cutoff
+            result.needs_course = True
+            return result
 
         vector = self.embed([question])[0]
         best = self._search(vector, None, 1)
@@ -289,9 +292,6 @@ class Retriever:
 
         self._match_examples(question, route)
         if route.fetch_all:
-            if not route.courses:
-                result.needs_course = True
-                return result
             result.chunks = [c for pdf in route.courses for c in self._fetch_all(pdf, route.chunk_types)]
             if result.chunks:
                 if route.matched_by == "example":   # it may only sound like an outline request

@@ -132,6 +132,12 @@ def test_curriculum_list_with_no_course_asks_which_course(retriever: Retriever) 
     assert result.needs_course and result.chunks == []
 
 
+def test_a_list_request_with_no_course_asks_which_course_even_with_a_weak_match(retriever: Retriever) -> None:
+    strict = Retriever(retriever.collection, fake_embed, RULES, top_k=4, min_similarity=0.05, min_similarity_no_course=0.99)
+    result = strict.retrieve("list all sections")
+    assert result.in_scope and result.needs_course
+
+
 def test_other_layout_falls_back_to_the_whole_course(retriever: Retriever) -> None:
     rules = {**RULES, "courses": [{"pdf_name": "Other.pdf", "aliases": ["brochure"]}]}
     r = Retriever(retriever.collection, fake_embed, rules, top_k=4, min_similarity=0.05, min_similarity_no_course=0.05)

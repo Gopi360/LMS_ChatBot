@@ -1,7 +1,11 @@
-"""Central configuration. Every value can be overridden with an environment variable
-(or a .env file loaded by your shell/IDE) so nothing is hard-coded in the modules."""
+"""Central configuration. Every value can be overridden with an environment variable or the
+project's .env file, so nothing is hard-coded in the modules."""
 import os
 from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")      # real environment variables win
 
 PROJECT_ROOT = Path(os.getenv("LMS_PROJECT_ROOT", Path(__file__).resolve().parents[1]))
 
@@ -37,3 +41,14 @@ RETRIEVAL_MIN_SIMILARITY_NO_COURSE = float(os.getenv("RETRIEVAL_MIN_SIMILARITY_N
 # example scores at least this, and beats the next type by at least the margin.
 RETRIEVAL_MIN_INTENT_SIMILARITY = float(os.getenv("RETRIEVAL_MIN_INTENT_SIMILARITY", 0.55))
 RETRIEVAL_MIN_INTENT_MARGIN = float(os.getenv("RETRIEVAL_MIN_INTENT_MARGIN", 0.03))
+
+# --- Answer generation ----------------------------------------------------------------
+# Gemini's free tier is for the demo only: see app/generation/llm.py before using real PDFs.
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+GEMINI_THINKING_LEVEL = os.getenv("GEMINI_THINKING_LEVEL", "low")   # 3.8 Flash: low, medium or high
+LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", 0.2))
+LLM_MAX_OUTPUT_TOKENS = int(os.getenv("LLM_MAX_OUTPUT_TOKENS", 2048))   # includes the model's thinking
+LLM_TIMEOUT_SECONDS = int(os.getenv("LLM_TIMEOUT_SECONDS", 30))
+MAX_QUESTION_CHARS = int(os.getenv("MAX_QUESTION_CHARS", 500))
