@@ -23,8 +23,8 @@ Each branch builds on the one before it. `main` is only the Phase 1-2 baseline.
 | `main` | Baseline | Yes |
 | `feat/phase3-vector-index` | Cleanup, fixes, Phase 3 | Yes |
 | `feat/phase4-retrieval` | Phase 4 | Yes |
-| `feat/semantic-question-routing` | Example-question routing | **No, local only** |
-| `feat/gemini-answers` | Gemini answers. **The latest work** | **No, local only** |
+| `feat/semantic-question-routing` | Example-question routing | Yes |
+| `feat/gemini-answers` | Gemini answers. **The latest work** | Yes |
 
 Repo: https://github.com/Gopi360/LMS_ChatBot (public).
 
@@ -52,7 +52,6 @@ Repo: https://github.com/Gopi360/LMS_ChatBot (public).
 - [ ] Rotate the Gemini key. The current one was pasted into a chat, so treat it as exposed. Replace it in `.env` by hand.
 - [ ] Show the demo to the manager.
 - [ ] Update `reports/` (deck and report): they still say 80% and that Phase 5 waits for a new laptop.
-- [ ] Decide whether to push `feat/semantic-question-routing` and `feat/gemini-answers`.
 - [ ] Run disk and memory checks: the laptop restarted unexpectedly 7 times, cause not proven.
 
 **Waiting on others:**
