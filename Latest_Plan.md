@@ -165,24 +165,38 @@ Price: ₹459.00 (list price ₹3,199.00, 86% off). This is the price shown when
 
 ### Measured retrieval quality (Phase 4, `evaluation/evaluate_retrieval.py`)
 
-Final score on questions never used for tuning. A pass means the right chunk was retrieved, not that an answer was written.
+Latest score on a blind set: 70 course questions and 14 off-topic ones, written by a separate agent that could not see the
+routing rules, the example questions or the older questions. It was run once, after the code and cutoffs were fixed. A pass
+means the right chunk was retrieved, not that an answer was written.
 
-| | Plain search | Routed retrieval |
-|---|---:|---:|
-| Course questions passed | 16/30 | **24/30 (80%)** |
-| Off-topic questions rejected | not applicable | **7/7** |
-| Average chunks per question | 4.0 | 2.8 |
-| Approx. context tokens, average | 538 | 364 |
+| | Plain search | Patterns only | Patterns + example questions |
+|---|---:|---:|---:|
+| Course questions passed | 36/70 (51%) | 46/70 (66%) | **58/70 (83%)** |
+| Off-topic questions rejected | not applicable | 11/14 | **11/14** |
+| Average chunks per question | 4.0 | 3.1 | 2.7 |
+| Approx. context tokens, average | 512 | 408 | 372 |
+| Approx. context tokens, largest | 896 | 1,106 | 1,349 |
 
-An earlier held-out set also scored 24/30, then joined the dev set after its failures were fixed. The dev set now passes
-60/60 and 10/10, but those questions were used for tuning, so that is not a quality figure.
+Example questions gained 13 and lost 1 ("will aws get me thru the CLF-C02 exam"). By question type: topic 10/10,
+instructor 9/10, audience 9/10, curriculum list 8/10, duration and price 8/10, requirements 7/10, outcomes 7/10.
+
+This set is harder than the previous ones, on purpose: about a third of it is casual chat wording. **The earlier 24/30 (80%)
+must not be compared with 58/70 (83%).** The fair comparison is 46/70 to 58/70 on the same questions. This set has now been
+seen, so it is spent as a test: any further tuning against it makes the 83% unfair, and the next change needs a new blind set.
+The older held-out sets joined dev. Dev is 199 questions after removing near-copies of the blind set, and its score
+(160/174, 22/25) is not a quality figure.
 
 Known limits:
-- **Wording:** 5 of the 6 failures were phrasings the patterns do not recognise ("Who runs…", "goals of…", "help me achieve",
-  "What should I know before…"), and the sixth names two courses without a comparison word. These questions still reach the
-  right course but may miss the right chunk. Adding patterns one by one will not solve this. The better fix is to compare
-  each question with example questions by embedding, instead of regex patterns. Pros: handles new wording and reuses
-  the embedding model. Cons: needs a list of examples and a new measurement.
+- **Course words used as ordinary words:** 3 of the 14 off-topic questions were accepted ("how much does a ball python cost
+  as a pet", two about Java the island), because naming a course lowers the cutoff. This was not addressed by example questions.
+- **Wording that still misses:** examples fire only on a strong match, so some phrasings stay broad ("whats the ml course
+  going for rn"). Some "how much" questions are taken for price by a pattern ("How much RAM should my laptop have…"), and
+  patterns are never overridden.
+- **The full course title alone:** "Machine Learning A-Z" with no "the" or "course" is not treated as clearly naming the
+  course, so such questions stay broad (at least 2 of the 12 misses). The rule exists so that "Is Python free?" stays broad.
+- **An outline found by example also runs a normal search,** because a topic question can sound like an outline request.
+  This protects the answer, but those are the largest contexts (up to about 1,350 tokens), which matters on a slow machine.
+- **Example cutoffs (0.55 score, 0.03 lead)** were tuned on dev and on these 5 demo courses. Re-measure with the real PDFs.
 - **The no-course cutoff is thin:** 0.445, with one real question at 0.448 in the final test. A cutoff set too high
   rejects real questions, so re-measure it with the real PDFs.
 - **Aliases are per course:** `config/retrieval_rules.json` lists the 5 demo courses. The real PDFs need new entries, and

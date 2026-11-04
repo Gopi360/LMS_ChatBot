@@ -54,7 +54,11 @@ Override with `CHUNK_MAX_TOKENS`, `CHUNK_OVERLAP_TOKENS` (see `app/config.py`).
 `config/retrieval_rules.json` holds course short names and question types. **When new PDFs arrive, update `courses`**, then
 re-measure: `python -m evaluation.evaluate_retrieval --scores`. Tune against `dev` only. Keep `held_out` for the final score.
 
-Latest held-out result: 24/30 course questions (plain search: 16/30) and 7/7 off-topic questions rejected.
+Each question type has `examples` in the same file. Patterns decide first. If none fits and a course is clearly named, the
+question is matched to the examples by meaning. Add examples for wordings that are missed, and keep them general.
+
+Latest blind-test result: 58/70 course questions (patterns only: 46/70, plain search: 36/70) and 11/14 off-topic questions
+rejected. That set has been used once, so write a new one before measuring another change. See `Latest_Plan.md` section 6.
 
 ## When a new PDF behaves badly
 1. Open `ingestion_report.md`: WARN lines say what to check.
