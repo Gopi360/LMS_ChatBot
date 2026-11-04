@@ -348,8 +348,6 @@ integration guide.
 ## 11. Open decisions
 
 1. **Re-save the 5 demo PDFs?** Recommended: yes, unless the real PDFs arrive soon. It restores the missing pages and collapsed lists.
-2. **GitHub:** the repo is public and `data/processed/chunks.json` holds copied Udemy text. Either make the repo private,
-   or remove the generated data from history before pushing. Nothing is pushed yet.
 
 ## 12. Real PDFs later (production)
 
