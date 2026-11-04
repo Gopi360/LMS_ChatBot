@@ -28,7 +28,7 @@ DEMO_QUESTIONS: List[Dict[str, str]] = [
     {"q": "Does the Python course cover decorators?", "expect": "answered"},
     {"q": "Compare the price of the Java and Python courses", "expect": "answered"},
     {"q": "List all sections", "expect": "needs_course"},
-    {"q": "Is there a refund policy for the AWS course?", "expect": "not_found"},
+    {"q": "Is there a refund policy for the AWS course?", "expect": "answered"},
     {"q": "how much does a ball python cost as a pet", "expect": "not_found"},
     {"q": "What is the capital of France?", "expect": "out_of_scope"},
 ]
