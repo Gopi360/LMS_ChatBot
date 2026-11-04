@@ -50,7 +50,7 @@ Do not add libraries without a clear need.
 | 2. Cleaning and chunking | **Done and tested** |
 | 3. Embeddings + ChromaDB | **Done and tested** |
 | 4. Retrieval | **Done and tested; awaiting user approval** |
-| 5. LLM integration (RAG) | **Next; needs the new laptop** |
+| 5. LLM integration (RAG) | **Built for the demo with Gemini; not yet tested with a real key.** Qwen waits for better hardware |
 | 6. FastAPI backend | to do |
 | 7. Testing and evaluation | to do |
 
@@ -260,6 +260,16 @@ on the new laptop.
 7. Deliverables: `retriever.py`, retrieval test script. **Stop for approval.**
 
 ### Phase 5: LLM integration and RAG
+**Demo status:** the answer step exists in `app/generation/` (`llm.py`, `prompts.py`, `chatbot.py`), using Gemini
+(`gemini-3.8-flash`) instead of Ollama, so the demo does not need new hardware. Gemini is a stand-in: its answers say nothing
+about how Qwen 4B would perform, and its free tier must not receive real PDFs or student data. It is tested with stand-ins for
+the model and with real SDK failures, but no real answer has been generated yet. Qwen remains to be added as a provider using
+the steps below. Follow-ups use the cheap approach: a question that names no course keeps the last course as a search filter.
+The question itself is never rewritten, so it is still scored in the student's own words. On a hand-written list of 21 real
+follow-ups and 12 off-topic ones, 19 and 10 behaved correctly. This is a small list, not a quality score. Very short questions
+with "it" reach the model even if off-topic ("How do I cook it?"), and the prompt must then reply that the documents do not say.
+"Do I get a certificate?" and "Can I run it on AWS?" are rejected as follow-ups. Name the course to ask them.
+
 1. Ollama Python client, model tag `qwen3.5:4b` from config. The model's defaults do not suit this job, so set all of
    these on every request: `think=False` (thinking is on by default), `temperature` ≈ 0.1 (default 1),
    `presence_penalty` 0 (default 1.5, which pushes the model away from repeating exact facts), `num_ctx` ≈ 3072–4096

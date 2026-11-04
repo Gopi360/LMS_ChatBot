@@ -1,4 +1,4 @@
-# LMS Course Chatbot – ingestion, index and retrieval (Phases 1–4)
+# LMS Course Chatbot – ingestion, index, retrieval and demo answers (Phases 1–5)
 
 Reads course PDFs **directly**, turns them into clean, retrieval-sized chunks with metadata, and stores them in a local
 ChromaDB index. No hand-made TXT files are needed: add a PDF, run the pipeline, read the report, run the indexer.
@@ -59,6 +59,30 @@ question is matched to the examples by meaning. Add examples for wordings that a
 
 Latest blind-test result: 58/70 course questions (patterns only: 46/70, plain search: 36/70) and 11/14 off-topic questions
 rejected. That set has been used once, so write a new one before measuring another change. See `Latest_Plan.md` section 6.
+
+## Answers (demo, using Gemini)
+Retrieval runs on this machine. Only the question and the passages found for it go to Gemini, which writes the reply.
+
+1. Create a key in Google AI Studio.
+2. Copy `.env.example` to `.env` and set `GEMINI_API_KEY`. `.env` is ignored by Git. Never commit it or paste the key anywhere.
+3. Ask a question, or leave it out to chat:
+
+```
+python -m app.generation.chatbot "How long is the Python course?"
+python -m app.generation.chatbot
+python -m evaluation.rehearse_demo
+```
+
+Run the rehearsal before a demo and read the answers. It uses one Gemini request per answered question, and it pauses between
+questions because of the free limits, which you can see in Google AI Studio.
+
+An answer must cite its passages. The sources shown come from the index, not from the model's text. An answer that cites
+nothing is replaced with "not available in the provided course documents".
+
+**The Gemini free tier is for the demo PDFs only.** Google may use free-tier prompts to improve its products, and people may
+read them. Do not send real course PDFs or student data through it. Those need a paid service or a model on our own machine.
+
+To add another provider, add a class in `app/generation/llm.py` and select it with `LLM_PROVIDER`.
 
 ## When a new PDF behaves badly
 1. Open `ingestion_report.md`: WARN lines say what to check.
