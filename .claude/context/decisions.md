@@ -6,8 +6,10 @@
 | The LMS delivery is backend and APIs | The LMS already has a screen | User |
 | Build a small demo chat panel | To show and test the bot in a browser. Does not replace the LMS screen. Replaces the earlier "no chat page" rule | User, 2026-11-05 |
 | Hide sources from the student, keep them for admins | The student sees a clean reply. The citation check still runs, and the API still returns sources | User, 2026-11-05 |
-| Add friendly replies for greetings | Fixed replies, not the model. A 1.7B model must not write free chat | Suggested, confirm first |
-| Panel design: one page served by FastAPI | Reuses the API the LMS needs anyway. Streamlit is quicker but is thrown away | Suggested, confirm first |
+| Add friendly replies after the panel is tested by hand | Fixed replies, not the model. A 1.7B model must not write free chat | User, 2026-11-06 |
+| Panel first, answer fixes later | The user presents the panel, and the bot is good enough for that | User, 2026-11-06 |
+| Panel design: one offline page served by FastAPI | Reuses the API the LMS needs anyway. No build step, and no internet needed | Built |
+| Panel look: a student's exercise book | Green cover, ruled page, margin numbers. Presenter view shows highlighted sources | Built |
 | Answer cache, later | Reuse only if the passages match and similarity is about 0.90 or more. Similarity alone is unsafe | User: postponed |
 | Answer only from the PDFs | No invented fees, durations or instructors | Project rule |
 | We do not train the model | Knowledge comes from search, so new PDFs need no retraining | Technical |

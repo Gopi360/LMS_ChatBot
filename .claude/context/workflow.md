@@ -47,7 +47,8 @@ The evaluator is `evaluation/evaluate_retrieval.py`, with questions in `evaluati
 Planned endpoints: `POST /api/v1/chat`, `GET /api/v1/health`, `POST /api/v1/ingest` (admin). The LMS backend calls our API, never the
 student's browser. Read `Latest_Plan.md` section 10 first, and use the `fastapi-patterns` skill. Docker is required for production.
 
-The demo chat panel comes after the API and calls `POST /api/v1/chat`. Requirements so far:
+The API and demo chat panel are built (`app/api/`, `app/web/`). Still open from the original requirements: friendly replies, and
+streaming. The panel calls `POST /api/v1/chat`. Requirements:
 - Students see a clean reply: no `[1]` markers and no source list. An admin or debug view can still show sources.
 - Hide the display only. The citation check stays, and the API keeps returning `sources`.
 - Add friendly fixed replies for greetings, thanks and "what can you do?". Do not let the model chat freely.

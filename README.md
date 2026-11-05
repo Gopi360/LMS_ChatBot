@@ -98,6 +98,13 @@ read them. Do not send real course PDFs or student data through it. Those need a
 
 To add a paid service later, add a class in `app/generation/llm.py` and select it with `LLM_PROVIDER`.
 
+## Demo chat panel
+Double-click `run_demo.bat`, or run it from Command Prompt. It starts the server with the local model and opens the panel at
+http://127.0.0.1:8000. It needs no internet. Ollama must be running, with `qwen3:1.7b` installed. Press Ctrl+C in its window to stop.
+
+Students see a clean reply. Turn on **Presenter view** to see the sources, pages, citations and time for each answer.
+**New chat** or a page reload starts a fresh conversation.
+
 ## REST API
 Double-click `run_demo.bat`, or run it from Command Prompt. It uses the local model, so start Ollama first. It opens
 http://127.0.0.1:8000 and never changes `.env`. To run the server by hand:

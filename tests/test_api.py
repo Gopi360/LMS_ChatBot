@@ -279,6 +279,27 @@ def test_warm_up_embeds_and_loads_the_local_model(monkeypatch: pytest.MonkeyPatc
     assert len(retriever.embedded) == 1 and llm.calls == 1
 
 
+def test_warm_up_prepares_the_example_questions(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "LLM_PROVIDER", "gemini")
+    retriever = FakeRetriever()
+    prepared: List[str] = []
+    retriever.matcher = type("Matcher", (), {"best_score": lambda self, question: prepared.append(question)})()
+    with running_api(retriever=retriever):
+        pass
+    assert len(prepared) == 1
+
+
+def test_a_question_stuck_behind_a_slow_answer_gets_a_clean_503(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "CHAT_QUEUE_WAIT_SECONDS", 0.05)
+    llm = FakeLLM(seconds=0.5)
+    with running_api(llm=llm) as client, ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(_ask, client)
+        time.sleep(0.1)
+        second = _ask(client, session_id=OTHER_SESSION)
+        assert second.status_code == 503 and "busy" in second.json()["detail"]
+        assert first.result().status_code == 200
+
+
 def test_warm_up_does_not_spend_the_gemini_quota(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(config, "LLM_PROVIDER", "gemini")
     retriever, llm = FakeRetriever(), FakeLLM()
@@ -441,6 +462,20 @@ def test_line_breaks_and_list_lines_are_kept() -> None:
 
 def test_a_line_holding_only_citations_does_not_leave_a_gap() -> None:
     assert strip_citations("First.\n\n[1]\n\nSecond [2].", [1, 2]) == "First.\n\nSecond."
+
+
+@pytest.mark.parametrize("cited, clean", [
+    ("Use cd .. to go up [1].", "Use cd .. to go up."),
+    ("Payload ../etc/passwd [1].", "Payload ../etc/passwd."),
+    ("range 1..10 [1].", "range 1..10."),
+    ("Ratio 16 : 9 [1].", "Ratio 16 : 9."),
+    ("and more... [1].", "and more..."),
+    ("Use arr[1] to read it [1].", "Use arr[1] to read it."),
+    ("It takes 22 hours ([1]).", "It takes 22 hours."),
+    ("Fees (see [1], [2]) apply.", "Fees (see) apply."),
+])
+def test_removing_markers_never_changes_the_course_content(cited: str, clean: str) -> None:
+    assert strip_citations(cited, [1, 2]) == clean
 
 
 def test_a_dot_starting_a_word_and_an_ellipsis_are_not_touched() -> None:

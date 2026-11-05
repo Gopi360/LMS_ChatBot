@@ -74,5 +74,7 @@ API_HOST = os.getenv("API_HOST", "127.0.0.1")
 API_PORT = int(os.getenv("API_PORT", 8000))
 CHAT_MAX_SESSIONS = int(os.getenv("CHAT_MAX_SESSIONS", 200))             # above this, the oldest goes
 CHAT_SESSION_TTL_MINUTES = float(os.getenv("CHAT_SESSION_TTL_MINUTES", 60))   # idle time before a session expires
+# Below the page's own limit of 190 s, so the student gets the "busy" message, not a timeout.
+CHAT_QUEUE_WAIT_SECONDS = float(os.getenv("CHAT_QUEUE_WAIT_SECONDS", 170))
 CHAT_STARTUP_WAIT_SECONDS = float(os.getenv("CHAT_STARTUP_WAIT_SECONDS", 60))  # a question this early waits, then gets a 503
 HEALTH_TIMEOUT_SECONDS = float(os.getenv("HEALTH_TIMEOUT_SECONDS", 3))   # how long /health waits for Ollama

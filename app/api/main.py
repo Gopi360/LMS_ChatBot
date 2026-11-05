@@ -34,6 +34,7 @@ log = logging.getLogger(__name__)
 
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"
 
+BUSY_DETAIL = "The assistant is busy with another question. Please try again."
 UNAVAILABLE_REPLY = "The assistant is unavailable right now. Please try again in a moment."
 STARTING_DETAIL = "The assistant is still starting. Please try again in a moment."
 NOT_RUNNING_DETAIL = "The assistant is not available right now. Please try again later."
@@ -87,6 +88,9 @@ class Runtime:
             return
         with self.lock:
             self.retriever.embed(["warm up"])
+            matcher = getattr(self.retriever, "matcher", None)
+            if matcher:                             # it embeds its example questions on first use
+                matcher.best_score("warm up")
             if config.LLM_PROVIDER == "ollama":     # never Gemini: it would spend the free quota
                 self.generator("Reply with one word.", "Say OK.")
 
@@ -106,7 +110,10 @@ def _is_invalid(question: str, bot: Chatbot) -> bool:
 
 
 def _ask(runtime: Runtime, session_id: str, question: str) -> ChatReply:
-    with runtime.lock:
+    if not runtime.lock.acquire(timeout=config.CHAT_QUEUE_WAIT_SECONDS):
+        log.warning("A question waited too long behind another one")
+        raise HTTPException(status_code=503, detail=BUSY_DETAIL)
+    try:
         bot = runtime.sessions.get(session_id)
         try:
             return bot.ask(question)
@@ -115,6 +122,8 @@ def _ask(runtime: Runtime, session_id: str, question: str) -> ChatReply:
                 log.info("chat rejected chars=%s", len(question))
                 raise HTTPException(status_code=400, detail=str(exc)) from None
             raise
+    finally:
+        runtime.lock.release()
 
 
 def _to_response(session_id: str, reply: ChatReply, seconds: float) -> ChatResponse:

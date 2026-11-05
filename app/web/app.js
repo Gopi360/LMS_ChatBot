@@ -14,9 +14,7 @@
   var LONG_WAIT_AFTER_S = 60;
   var HEALTH_POLL_BUSY_MS = 5000;
   var HEALTH_POLL_IDLE_MS = 60000;
-  var SESSION_KEY = "course-assistant.session";
   var VIEW_KEY = "course-assistant.presenter";
-  var SESSION_PATTERN = /^[A-Za-z0-9_-]{8,64}$/;
   var NEAR_BOTTOM_PX = 96;
 
   var STATUS = {
@@ -84,18 +82,9 @@
     }).join("");
   }
 
+  /* A new session on every load: the screen starts empty, so the bot must not remember a course. */
   function startNewSession() {
     state.sessionId = makeSessionId();
-    writeStore("sessionStorage", SESSION_KEY, state.sessionId);
-  }
-
-  function loadSession() {
-    var stored = readStore("sessionStorage", SESSION_KEY);
-    if (stored && SESSION_PATTERN.test(stored)) {
-      state.sessionId = stored;
-    } else {
-      startNewSession();
-    }
   }
 
   /* Small DOM helpers. */
@@ -675,7 +664,7 @@
     if (state.stickToBottom) { el.jump.hidden = true; }
   }, { passive: true });
 
-  loadSession();
+  startNewSession();
   setPresenter(readStore("localStorage", VIEW_KEY) === "on");
   syncInput();
   checkHealth();

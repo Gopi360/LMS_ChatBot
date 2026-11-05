@@ -4,11 +4,11 @@ Last updated: 2026-11-05. Check `git log` and `git status` too, as this file can
 
 ## Next session: start here
 
-1. Stay on the latest work: `fix/qwen-answer-quality`, which is **local only**. Push it if the user asks. Start new branches from it.
-2. The user wants a **demo chat panel** next. Read "Next phase" in `workflow.md` and Phase 6 in `Latest_Plan.md`. The design is not
-   final, so confirm it with the user, then work one step at a time.
-3. Suggested order: small answer fixes, FastAPI, chat panel, fresh known-answer test.
-4. Not chosen yet, so ask before building: the answer cache (option C in `decisions.md`) and pushing this branch.
+1. The latest work is `feat/demo-chat-panel`, which is **local only**. Push it if the user asks. Start new branches from it.
+2. The demo panel is built. Start it by double-clicking `run_demo.bat`, or see the README.
+3. The user will test the panel by hand first. After that come friendly replies (asked for), then the small answer fixes, then
+   a fresh known-answer test.
+4. Not chosen yet, so ask before building: auto-citing one-passage answers, and the answer cache (`decisions.md`).
 5. The user runs commands in **Command Prompt**, so give `set NAME=value`, not `$env:`.
 
 ## Phases
@@ -20,7 +20,7 @@ Last updated: 2026-11-05. Check `git log` and `git status` too, as this file can
 | 3. Embeddings and index | Done |
 | 4. Retrieval | Done, awaiting manager approval |
 | 5. LLM answers | Works with Gemini and `qwen3:1.7b`. Local answers still vary between runs (see Known gaps) |
-| 6. FastAPI backend and demo chat panel | Not started. Design is in `Latest_Plan.md` Phase 6 and section 10 |
+| 6. FastAPI backend and demo chat panel | Chat, health and panel built. `/ingest`, an API key and Docker are not |
 | 7. Testing and evaluation | Not started. Answer quality has no measured score yet |
 
 ## Branches
@@ -35,7 +35,8 @@ Each branch builds on the one before it. `main` is only the Phase 1-2 baseline.
 | `feat/semantic-question-routing` | Example-question routing | Yes |
 | `feat/gemini-answers` | Gemini answers | Yes |
 | `feat/local-llm-provider` | Ollama provider | Yes |
-| `fix/qwen-answer-quality` | `qwen3:1.7b` default and answer fixes. **The latest work** | No |
+| `fix/qwen-answer-quality` | `qwen3:1.7b` default and answer fixes | No |
+| `feat/demo-chat-panel` | FastAPI and the demo chat panel. **The latest work** | No |
 
 Repo: https://github.com/Gopi360/LMS_ChatBot (public).
 
@@ -57,8 +58,11 @@ Repo: https://github.com/Gopi360/LMS_ChatBot (public).
 - **User's own test of `qwen3:1.7b`, 12 questions:** all 12 behaved as the guide predicted, including its known gaps: the Machine
   Learning answer was hidden and a label stayed visible. All 5 prices in the multi-course reply matched the PDFs. Replies took 3-14 s,
   and 36-52 s for long lists. The first model reply took 44 s.
+- **Reliability through the real API, 5 tries each, fresh session:** 5 of 5 for Python length, Java length, price comparison and Java
+  audience. The free laptop question was refused 5 of 5. Machine Learning requirements 4 of 5. **"Who teaches the AWS course?" only
+  2 of 5:** the other 3 were hidden for having no citation, so it was removed from the example buttons. Small sample.
 - **Dev set after the routing changes:** unchanged at 160/174 and 22/25. No new blind test has been run.
-- **Tests:** 221 pass with `python -m pytest tests -q`.
+- **Tests:** 297 pass with `python -m pytest tests -q`.
 
 ## Current setup
 
@@ -80,6 +84,7 @@ Repo: https://github.com/Gopi360/LMS_ChatBot (public).
 - [ ] Real PDFs, or one sample file. Layout is the biggest unknown. A different layout falls back to generic chunks.
 
 **Known gaps in the code:**
+- One-passage answers are sometimes hidden for having no citation, as with "Who teaches the AWS course?". Auto-citing would fix this.
 - Greetings are refused: "hi", "thanks", "bye", "who are you?" and "what can you do?" all get the off-topic reply.
 - `qwen3:1.7b` sometimes copies a passage label instead of citing, so a correct answer is hidden (Machine Learning requirements).
 - A label copied without its page stays visible and its number counts as a citation ("Who this course is for [1]").
@@ -92,8 +97,10 @@ Repo: https://github.com/Gopi360/LMS_ChatBot (public).
 - "Do I get a certificate?" and "Can I run it on AWS?" fail as follow-ups unless the course is named.
 - Only the last course is remembered, not earlier turns.
 - "List all the chapters of the Bible" gets "Which course do you mean?".
-- Students could see setup messages such as "Check GEMINI_API_KEY" or "Run: ollama pull". Split these before Phase 6.
+- The API replaces every `unavailable` message with one fixed reply. That hides setup details, but also useful ones such as "ask about one course".
 - `LLM_PROVIDER` defaults to `gemini`, so a machine with a Gemini key and no setting sends passages to Google. Change the default
   before real PDFs arrive.
-- `last_courses` lives on one `Chatbot` object. Phase 6 needs one per student session.
-- The fixes from the last review of `fix/qwen-answer-quality` had no second independent review.
+- A second review of the panel found these, not yet fixed: Retry after a "which course?" reply loses the first question; a failed
+  startup needs a server restart; empty questions wait for the lock; the page hard-codes the course list and the 500-character limit.
+- The API has no key yet. It listens on this laptop only. The LMS connection needs a key first.
+- The latest review fixes on `fix/qwen-answer-quality` and `feat/demo-chat-panel` had no second independent review.
