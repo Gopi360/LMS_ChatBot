@@ -1,15 +1,18 @@
 # Status
 
-Last updated: 2026-11-05. Check `git log` and `git status` too, as this file can fall behind.
+Last updated: 2026-11-06. Check `git log` and `git status` too, as this file can fall behind.
 
 ## Next session: start here
 
-1. The latest work is `feat/demo-chat-panel`, which is **local only**. Push it if the user asks. Start new branches from it.
-2. The demo panel is built. Start it by double-clicking `run_demo.bat`, or see the README.
-3. The user will test the panel by hand first. After that come friendly replies (asked for), then the small answer fixes, then
-   a fresh known-answer test.
-4. Not chosen yet, so ask before building: auto-citing one-passage answers, and the answer cache (`decisions.md`).
-5. The user runs commands in **Command Prompt**, so give `set NAME=value`, not `$env:`.
+1. The latest work is `feat/demo-chat-panel`, which is on GitHub. It includes `fix/qwen-answer-quality`. Start new branches from it.
+2. The dark chat panel is built. Start it by double-clicking `run_demo.bat`, or see the README. `run_demo.bat` has not yet been
+   tried with a real browser opening.
+3. **Tomorrow morning (2026-11-07), first job:** the auto-cite fix, confirmed with the user before starting. When exactly one passage
+   was found and the model left out the citation, the code cites it, and every number in the answer must appear in that
+   passage. This is for "Who teaches the AWS course?", which was answered only 2 of 5 times. Retest through the real API.
+4. After that: the user's manual test of the panel, friendly replies, the small answer fixes, then a fresh known-answer test.
+5. Not chosen yet, so ask before building: the answer cache (`decisions.md`).
+6. The user runs commands in **Command Prompt**, so give `set NAME=value`, not `$env:`.
 
 ## Phases
 
@@ -35,8 +38,8 @@ Each branch builds on the one before it. `main` is only the Phase 1-2 baseline.
 | `feat/semantic-question-routing` | Example-question routing | Yes |
 | `feat/gemini-answers` | Gemini answers | Yes |
 | `feat/local-llm-provider` | Ollama provider | Yes |
-| `fix/qwen-answer-quality` | `qwen3:1.7b` default and answer fixes | No |
-| `feat/demo-chat-panel` | FastAPI and the demo chat panel. **The latest work** | No |
+| `fix/qwen-answer-quality` | `qwen3:1.7b` default and answer fixes | Only as part of `feat/demo-chat-panel` |
+| `feat/demo-chat-panel` | FastAPI and the dark chat panel. **The latest work** | Yes |
 
 Repo: https://github.com/Gopi360/LMS_ChatBot (public).
 
@@ -61,6 +64,8 @@ Repo: https://github.com/Gopi360/LMS_ChatBot (public).
 - **Reliability through the real API, 5 tries each, fresh session:** 5 of 5 for Python length, Java length, price comparison and Java
   audience. The free laptop question was refused 5 of 5. Machine Learning requirements 4 of 5. **"Who teaches the AWS course?" only
   2 of 5:** the other 3 were hidden for having no citation, so it was removed from the example buttons. Small sample.
+- **Dark panel, real model, real Chrome, one run:** 5 of 5 replies correct. Student view clean, no page errors, no outside requests,
+  no sideways scroll at phone width. The restyle has had no separate code review.
 - **Dev set after the routing changes:** unchanged at 160/174 and 22/25. No new blind test has been run.
 - **Tests:** 297 pass with `python -m pytest tests -q`.
 
