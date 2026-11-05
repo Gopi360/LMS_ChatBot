@@ -2,6 +2,7 @@
 
 ## How the user likes to work
 
+- The user runs commands in Command Prompt: use `set NAME=value`, and give full step-by-step instructions for manual tests.
 - The user is Supriya Gope (Gopi), an AI and automation developer. Explain in plain English: they relay this to a manager.
 - Always give pros and cons when suggesting an approach.
 - When asked, use the superpowers skills and subagents on the best available model.
@@ -41,7 +42,16 @@ The evaluator is `evaluation/evaluate_retrieval.py`, with questions in `evaluati
   Qwen needs `think=False`, temperature about 0.1, `presence_penalty` 0 and `num_ctx` about 3072-4096.
 - **New settings:** add them to `app/config.py` with an env override, and to `.env.example`.
 
-## Next phase: FastAPI (Phase 6)
+## Next phase: FastAPI and the demo chat panel (Phase 6)
 
 Planned endpoints: `POST /api/v1/chat`, `GET /api/v1/health`, `POST /api/v1/ingest` (admin). The LMS backend calls our API, never the
 student's browser. Read `Latest_Plan.md` section 10 first, and use the `fastapi-patterns` skill. Docker is required for production.
+
+The demo chat panel comes after the API and calls `POST /api/v1/chat`. Requirements so far:
+- Students see a clean reply: no `[1]` markers and no source list. An admin or debug view can still show sources.
+- Hide the display only. The citation check stays, and the API keeps returning `sources`.
+- Add friendly fixed replies for greetings, thanks and "what can you do?". Do not let the model chat freely.
+- Each browser session needs its own `Chatbot`, because `last_courses` lives on that object.
+- Show a "thinking" state: replies take 3-50 s. Streaming would help more, but is a separate step.
+- Load the models when the server starts, so the first student does not wait about a minute.
+- Split the setup messages from student messages first, such as "Run: ollama pull".

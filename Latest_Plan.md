@@ -11,8 +11,8 @@ Build a locally hosted AI chatbot that answers candidate questions about courses
 extracted from course PDF documents. It will later be integrated into an existing Learning Management
 System (LMS).
 
-- **No frontend, decided.** The LMS already exists. We deliver the backend, its REST APIs and the project; the LMS team
-  connects it to their system (section 10).
+- **The LMS delivery is backend only.** The LMS already exists. We deliver the backend, its REST APIs and the project; the LMS
+  team connects it to their system (section 10). A small demo chat panel is planned for showing and testing (Phase 6).
 - Use **Retrieval-Augmented Generation (RAG)**: retrieve relevant chunks from the course PDFs, generate
   the answer with a **local LLM**.
 - The bot must answer **only** from the documents. No invented fees, durations, instructors,
@@ -313,6 +313,11 @@ Chat response:
   the student which course they mean.
 - Optional `course` field on chat requests: when a student is on a course page, the LMS sends it and course detection is skipped.
 - Deliverables: `routes.py`, `main.py`, API documentation (FastAPI docs + README section). **Stop for approval.**
+
+### Phase 6 add-on: demo chat panel (requested 2026-11-05, design to confirm)
+A small browser page for showing and testing the bot. It calls `POST /api/v1/chat`, and does not replace the LMS screen.
+Students see no `[1]` markers or source list, while the citation check and the API's `sources` stay. Greetings get fixed replies,
+not model text. Full requirements are in `.claude/context/workflow.md`.
 
 ### Phase 7: Testing and evaluation
 `evaluation/test_questions.json` + `evaluate.py`. Cover: duration, requirements, instructor, curriculum, ratings,

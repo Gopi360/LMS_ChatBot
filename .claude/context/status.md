@@ -2,6 +2,15 @@
 
 Last updated: 2026-11-05. Check `git log` and `git status` too, as this file can fall behind.
 
+## Next session: start here
+
+1. Stay on the latest work: `fix/qwen-answer-quality`, which is **local only**. Push it if the user asks. Start new branches from it.
+2. The user wants a **demo chat panel** next. Read "Next phase" in `workflow.md` and Phase 6 in `Latest_Plan.md`. The design is not
+   final, so confirm it with the user, then work one step at a time.
+3. Suggested order: small answer fixes, FastAPI, chat panel, fresh known-answer test.
+4. Not chosen yet, so ask before building: the answer cache (option C in `decisions.md`) and pushing this branch.
+5. The user runs commands in **Command Prompt**, so give `set NAME=value`, not `$env:`.
+
 ## Phases
 
 | Phase | State |
@@ -11,7 +20,7 @@ Last updated: 2026-11-05. Check `git log` and `git status` too, as this file can
 | 3. Embeddings and index | Done |
 | 4. Retrieval | Done, awaiting manager approval |
 | 5. LLM answers | Works with Gemini and `qwen3:1.7b`. Local answers still vary between runs (see Known gaps) |
-| 6. FastAPI backend | Not started. Design is in `Latest_Plan.md` section 10 |
+| 6. FastAPI backend and demo chat panel | Not started. Design is in `Latest_Plan.md` Phase 6 and section 10 |
 | 7. Testing and evaluation | Not started. Answer quality has no measured score yet |
 
 ## Branches
@@ -45,6 +54,9 @@ Repo: https://github.com/Gopi360/LMS_ChatBot (public).
 - **`qwen3:1.7b`, one run after the fixes:** 13 of 14 demo questions matched, and 16 of 17 hand-picked questions. Shown answers were
   correct on the facts checked. The failing question passes in some runs and fails in others. These questions were used to design
   the fixes, so this is not a quality score. Replies took 3-20 s, long lists 35-70 s, and the first about 100 s when cold.
+- **User's own test of `qwen3:1.7b`, 12 questions:** all 12 behaved as the guide predicted, including its known gaps: the Machine
+  Learning answer was hidden and a label stayed visible. All 5 prices in the multi-course reply matched the PDFs. Replies took 3-14 s,
+  and 36-52 s for long lists. The first model reply took 44 s.
 - **Dev set after the routing changes:** unchanged at 160/174 and 22/25. No new blind test has been run.
 - **Tests:** 221 pass with `python -m pytest tests -q`.
 
@@ -68,6 +80,7 @@ Repo: https://github.com/Gopi360/LMS_ChatBot (public).
 - [ ] Real PDFs, or one sample file. Layout is the biggest unknown. A different layout falls back to generic chunks.
 
 **Known gaps in the code:**
+- Greetings are refused: "hi", "thanks", "bye", "who are you?" and "what can you do?" all get the off-topic reply.
 - `qwen3:1.7b` sometimes copies a passage label instead of citing, so a correct answer is hidden (Machine Learning requirements).
 - A label copied without its page stays visible and its number counts as a citation ("Who this course is for [1]").
 - `qwen3:1.7b` drops the saved date from prices, against the prompt's rule. Adding it in code may be safer than more prompting.

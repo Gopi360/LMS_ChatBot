@@ -3,7 +3,12 @@
 | Decision | Why | Source |
 |---|---|---|
 | Demo first, real PDFs after approval | Set by the manager | Manager |
-| Backend and APIs only, no chat page | The LMS already has a screen | User |
+| The LMS delivery is backend and APIs | The LMS already has a screen | User |
+| Build a small demo chat panel | To show and test the bot in a browser. Does not replace the LMS screen. Replaces the earlier "no chat page" rule | User, 2026-11-05 |
+| Hide sources from the student, keep them for admins | The student sees a clean reply. The citation check still runs, and the API still returns sources | User, 2026-11-05 |
+| Add friendly replies for greetings | Fixed replies, not the model. A 1.7B model must not write free chat | Suggested, confirm first |
+| Panel design: one page served by FastAPI | Reuses the API the LMS needs anyway. Streamlit is quicker but is thrown away | Suggested, confirm first |
+| Answer cache, later | Reuse only if the passages match and similarity is about 0.90 or more. Similarity alone is unsafe | User: postponed |
 | Answer only from the PDFs | No invented fees, durations or instructors | Project rule |
 | We do not train the model | Knowledge comes from search, so new PDFs need no retraining | Technical |
 | Plan on a local model; no paid API is expected | Add one only if it actually arrives. Confirm with the manager | User |
@@ -21,7 +26,8 @@
 
 ## Things not to redo
 
-- Do not propose a chat page.
+- Do not replace the LMS chat screen. The chat panel is a demo and test tool.
+- Do not remove the citation check when hiding sources. Hide the display only.
 - Do not suggest training or fine-tuning for course knowledge.
 - Do not rewrite the student's question to add a course.
 - Do not replace patterns with examples.

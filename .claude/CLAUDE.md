@@ -1,7 +1,8 @@
 # LMS Course Chatbot: start here
 
 Backend for a chatbot that answers student questions about courses, from course PDFs only. The company's LMS already exists
-and keeps its own chat screen, so **do not build a frontend**. We deliver the backend, REST APIs and the project.
+and keeps its own chat screen, so we deliver the backend, REST APIs and the project. **The one exception is a small demo chat
+panel, requested by the user on 2026-11-05.** It is for showing and testing the bot, and does not replace the LMS screen.
 
 Read these first. They are short and describe the current state:
 

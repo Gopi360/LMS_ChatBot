@@ -3,7 +3,7 @@
 Reads course PDFs **directly**, turns them into clean, retrieval-sized chunks with metadata, and stores them in a local
 ChromaDB index. No hand-made TXT files are needed: add a PDF, run the pipeline, read the report, run the indexer.
 Retrieval finds the right chunks for a question, and an LLM writes the answer from them. The REST API is not built yet; see `Latest_Plan.md`.
-This project is a backend only: the existing LMS provides the chat screen.
+The existing LMS provides the chat screen, so the delivery is a backend. A small demo chat panel is planned for showing and testing.
 
 ## Setup (Windows, Python 3.10+)
 ```
