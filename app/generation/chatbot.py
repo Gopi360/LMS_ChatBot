@@ -132,7 +132,7 @@ class Chatbot:
         if not re.sub(r"\[\d+\]", "", text).strip(" .,;\n"):      # nothing left but citations
             return ChatReply(question, "not_found", NOT_FOUND_REPLY)
         if not cited:
-            log.warning("An answer with no valid citation was not shown: %s", question)
+            log.warning("An answer with no valid citation was not shown (question of %s characters)", len(question))
             return ChatReply(question, "not_found", NOT_FOUND_REPLY)
         return ChatReply(question, "answered", text, [_source(n, result.chunks[n - 1]) for n in cited])
 

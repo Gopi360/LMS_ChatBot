@@ -1,9 +1,9 @@
-# LMS Course Chatbot – ingestion, index, retrieval and answers (Phases 1–5)
+# LMS Course Chatbot – ingestion, index, retrieval, answers and REST API (Phases 1–6)
 
 Reads course PDFs **directly**, turns them into clean, retrieval-sized chunks with metadata, and stores them in a local
 ChromaDB index. No hand-made TXT files are needed: add a PDF, run the pipeline, read the report, run the indexer.
-Retrieval finds the right chunks for a question, and an LLM writes the answer from them. The REST API is not built yet; see `Latest_Plan.md`.
-The existing LMS provides the chat screen, so the delivery is a backend. A small demo chat panel is planned for showing and testing.
+Retrieval finds the right chunks for a question, and an LLM writes the answer from them. A REST API serves the answers; see "REST API" below.
+The existing LMS provides the chat screen, so the delivery is a backend. A small demo chat panel is for showing and testing.
 
 ## Setup (Windows, Python 3.10+)
 ```
@@ -97,6 +97,46 @@ nothing is replaced with "not available in the provided course documents".
 read them. Do not send real course PDFs or student data through it. Those need a paid service or a model on our own machine.
 
 To add a paid service later, add a class in `app/generation/llm.py` and select it with `LLM_PROVIDER`.
+
+## REST API
+Double-click `run_demo.bat`, or run it from Command Prompt. It uses the local model, so start Ollama first. It opens
+http://127.0.0.1:8000 and never changes `.env`. To run the server by hand:
+```
+set LLM_PROVIDER=ollama
+.venv\Scripts\python.exe -m uvicorn app.api.main:app --host 127.0.0.1 --port 8000
+```
+The port opens at once, and the index and models load in the background. Until that ends, `/api/v1/health` shows `"warming": true`. A question sent
+that early waits up to `CHAT_STARTUP_WAIT_SECONDS`, then gets a 503.
+
+| Route | What it does |
+|---|---|
+| `POST /api/v1/chat` | Answers a question |
+| `GET /api/v1/health` | Always 200. `status` is `ok` or `degraded`, with the provider, model, chunk count and `warming` |
+| `GET /` and `/web/...` | The demo page and its files, from `app/web/` |
+| `GET /docs` | The API documentation |
+
+Request:
+```json
+{ "session_id": "demo-session-1", "message": "How long is the Python course?", "student_id": "optional" }
+```
+`session_id` is 8-64 letters, digits, `-` or `_`, otherwise the reply is a 422. Reply:
+```json
+{ "session_id": "demo-session-1", "status": "answered", "answer": "The course is 22 hours.",
+  "cited_answer": "The course is 22 hours [1].",
+  "sources": [ { "number": 1, "document": "x.pdf", "course_name": "...", "page": 2, "page_end": 3, "section": "..." } ],
+  "seconds": 4.2 }
+```
+* `status` is `answered`, `not_found`, `out_of_scope`, `needs_course` or `unavailable`.
+* `answer` is for the student and has no `[1]` markers. The citation check still runs, and `cited_answer` and `sources` are for an admin view.
+* An empty or too long question gets a 400. A server that is starting or could not start gets a 503. An unexpected failure gets a 500. All three return `{"detail": "..."}` with a safe message.
+* `unavailable` returns a fixed message. The real reason, such as a missing model, is only in the server log.
+
+Each `session_id` has its own memory of the course being discussed. Sessions live in memory, so a restart clears them. `CHAT_MAX_SESSIONS`
+and `CHAT_SESSION_TTL_MINUTES` limit them. One question runs at a time and the others queue, so a busy period means waiting.
+
+**There is no API key yet.** The server only listens on this machine, so it is for the demo. Before the LMS connects, add an API key
+(`X-API-Key`, planned in `Latest_Plan.md` sections 6 and 10) and only then change `API_HOST`. `student_id` is accepted but not used or logged.
+`POST /api/v1/ingest` is not built, so update the index with the commands under "Run".
 
 ## When a new PDF behaves badly
 1. Open `ingestion_report.md`: WARN lines say what to check.

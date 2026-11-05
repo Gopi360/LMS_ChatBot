@@ -8,3 +8,4 @@ Courses/*.pdf
 .pytest_cache/
 data/processed/
 reports/
+.playwright-mcp/

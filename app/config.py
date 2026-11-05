@@ -67,3 +67,12 @@ LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", 0.2))
 LLM_MAX_OUTPUT_TOKENS = int(os.getenv("LLM_MAX_OUTPUT_TOKENS", 4096))   # includes the model's thinking
 LLM_TIMEOUT_SECONDS = int(os.getenv("LLM_TIMEOUT_SECONDS", 30))
 MAX_QUESTION_CHARS = int(os.getenv("MAX_QUESTION_CHARS", 500))
+
+# --- REST API -------------------------------------------------------------------------
+# Only this machine by default: there is no API key yet, so do not open it to the network.
+API_HOST = os.getenv("API_HOST", "127.0.0.1")
+API_PORT = int(os.getenv("API_PORT", 8000))
+CHAT_MAX_SESSIONS = int(os.getenv("CHAT_MAX_SESSIONS", 200))             # above this, the oldest goes
+CHAT_SESSION_TTL_MINUTES = float(os.getenv("CHAT_SESSION_TTL_MINUTES", 60))   # idle time before a session expires
+CHAT_STARTUP_WAIT_SECONDS = float(os.getenv("CHAT_STARTUP_WAIT_SECONDS", 60))  # a question this early waits, then gets a 503
+HEALTH_TIMEOUT_SECONDS = float(os.getenv("HEALTH_TIMEOUT_SECONDS", 3))   # how long /health waits for Ollama
