@@ -1,6 +1,7 @@
-"""Calls the LLM that writes the answer. The provider is a setting (LLM_PROVIDER), so Qwen or a
-paid service can replace Gemini later by adding one class here. Nothing else in the project
-depends on Gemini: it only sees a Generator, a function taking the rules and the prompt.
+"""Calls the LLM that writes the answer. The provider is a setting (LLM_PROVIDER): ollama runs a
+model on this machine, gemini uses Google's service. A paid service can be added later with one
+class here. Nothing else in the project depends on the provider: it only sees a Generator, a
+function taking the rules and the prompt.
 
 The Gemini free tier is for the demo only. Google may use free-tier prompts to improve its
 products and people may read them, so real course PDFs and student data must not go through it.
@@ -8,7 +9,7 @@ products and people may read them, so real course PDFs and student data must not
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Union
 
 import httpx
 from google import genai
@@ -74,10 +75,70 @@ def _client_error_message(code: int) -> str:
     return f"Gemini refused the request (HTTP {code})."
 
 
+class OllamaGenerator:
+    """A model on this machine, through Ollama's HTTP API, so the passages never leave it."""
+
+    def __init__(self, model: str, client: Optional[httpx.Client] = None) -> None:
+        self.model = model
+        # trust_env is off because a Windows proxy setting could otherwise carry the passages off this machine.
+        self.client = client or httpx.Client(base_url=config.LLM_BASE_URL, timeout=config.OLLAMA_TIMEOUT_SECONDS,
+                                             trust_env=False)
+
+    def __call__(self, system: str, prompt: str) -> str:
+        # Ollama cuts a prompt that is too long, reports success, and its token count hides the cut.
+        # So check first. Three characters per token is a cautious estimate for English.
+        if (len(system) + len(prompt)) // 3 > config.NUM_CTX - config.LLM_NUM_PREDICT:
+            log.error("The prompt is too long for NUM_CTX=%s", config.NUM_CTX)
+            raise LLMError("That needs too much course text at once. Please ask about one course at a time.")
+        request = {
+            "model": self.model, "stream": False, "think": False, "keep_alive": _keep_alive(config.LLM_KEEP_ALIVE),
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+            "options": {"temperature": config.LLM_TEMPERATURE, "presence_penalty": 0, "num_ctx": config.NUM_CTX,
+                        "num_predict": config.LLM_NUM_PREDICT}}
+        try:
+            response = self.client.post("/api/chat", json=request)
+            response.raise_for_status()
+            data = response.json()
+        except httpx.TimeoutException:
+            log.error("Ollama timed out after %s s", config.OLLAMA_TIMEOUT_SECONDS)
+            raise LLMError("The local model took too long to answer. Please try again.") from None
+        except httpx.TransportError as exc:
+            log.error("Could not reach Ollama: %s", type(exc).__name__)
+            raise LLMError("Could not reach the local model. Is Ollama running?") from None
+        except httpx.HTTPStatusError as exc:
+            log.error("Ollama refused the request: HTTP %s: %s", exc.response.status_code, exc.response.text[:200])
+            if exc.response.status_code == 404 and "model" in exc.response.text:     # a wrong address is also a 404
+                raise LLMError(f"The model is not installed. Run: ollama pull {self.model}") from None
+            raise LLMError("The local model could not answer right now. Please try again.") from None
+        except Exception as exc:        # a reply that is not JSON, such as a proxy page
+            log.error("Ollama call failed: %s", type(exc).__name__)
+            raise LLMError("The local model could not answer right now. Please try again.") from None
+
+        message = data.get("message") if isinstance(data, dict) else None
+        text = (message.get("content") or "").strip() if isinstance(message, dict) else ""
+        if not text:
+            log.error("Ollama returned no text")
+            raise LLMError("The local model returned no answer. Please try again.")
+        if data.get("done_reason") == "length":
+            log.error("Ollama stopped at the limit of %s tokens", config.LLM_NUM_PREDICT)
+            raise LLMError("The answer was cut short. Please ask about a smaller part of the course.")
+        return text
+
+
+def _keep_alive(value: str) -> Union[int, str]:
+    """Ollama accepts 3600 or "30m", but rejects "3600", and settings always arrive as text."""
+    try:
+        return int(value)
+    except ValueError:
+        return value
+
+
 def get_generator(provider: Optional[str] = None) -> Generator:
     provider = provider or config.LLM_PROVIDER
+    if provider == "ollama":
+        return OllamaGenerator(config.LLM_MODEL)
     if provider != "gemini":
-        raise LLMError(f"LLM_PROVIDER '{provider}' is not supported. Use: gemini.")
+        raise LLMError(f"LLM_PROVIDER '{provider}' is not supported. Use: ollama or gemini.")
     if not config.GEMINI_API_KEY:
         raise LLMError("GEMINI_API_KEY is not set. Add it to the .env file (see .env.example).")
     return GeminiGenerator(config.GEMINI_API_KEY, config.GEMINI_MODEL)

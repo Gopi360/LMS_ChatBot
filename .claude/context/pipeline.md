@@ -28,7 +28,7 @@ question
         3. What kind of question?    regex patterns first; if none fits, IntentMatcher compares with example questions
         4. Search                    ChromaDB, filtered by course and chunk type
      -> build_prompt + SYSTEM_PROMPT app/generation/prompts.py    numbered passages
-     -> Generator                    app/generation/llm.py        Gemini, chosen by LLM_PROVIDER
+     -> Generator                    app/generation/llm.py        Ollama or Gemini, chosen by LLM_PROVIDER
      -> citations checked            sources come from stored metadata, not the model's text
   -> ChatReply                       status, text, sources
 ```

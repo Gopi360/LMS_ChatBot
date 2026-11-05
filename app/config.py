@@ -50,7 +50,16 @@ RETRIEVAL_MIN_INTENT_MARGIN = float(os.getenv("RETRIEVAL_MIN_INTENT_MARGIN", 0.0
 
 # --- Answer generation ----------------------------------------------------------------
 # Gemini's free tier is for the demo only: see app/generation/llm.py before using real PDFs.
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")      # gemini or ollama
+# The local model. To change it: ollama pull <model>, then set LLM_MODEL. No code change is needed.
+LLM_MODEL = os.getenv("LLM_MODEL", "gemma3:1b")
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://localhost:11434")
+# Prompt plus answer must fit. A typical prompt is about 700 tokens, but outlines of several courses are
+# far larger, and those are refused rather than cut. See OllamaGenerator.
+NUM_CTX = int(os.getenv("NUM_CTX", 4096))
+LLM_NUM_PREDICT = int(os.getenv("LLM_NUM_PREDICT", 512))    # answer limit; a reply that reaches it is an error
+LLM_KEEP_ALIVE = os.getenv("LLM_KEEP_ALIVE", "30m")         # stay loaded, because loading adds seconds to a reply
+OLLAMA_TIMEOUT_SECONDS = int(os.getenv("OLLAMA_TIMEOUT_SECONDS", 180))   # a CPU is far slower than Gemini
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 GEMINI_THINKING_LEVEL = os.getenv("GEMINI_THINKING_LEVEL", "low")   # 3.8 Flash: low, medium or high

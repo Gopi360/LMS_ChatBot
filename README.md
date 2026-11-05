@@ -1,8 +1,8 @@
-# LMS Course Chatbot – ingestion, index, retrieval and demo answers (Phases 1–5)
+# LMS Course Chatbot – ingestion, index, retrieval and answers (Phases 1–5)
 
 Reads course PDFs **directly**, turns them into clean, retrieval-sized chunks with metadata, and stores them in a local
 ChromaDB index. No hand-made TXT files are needed: add a PDF, run the pipeline, read the report, run the indexer.
-Retrieval finds the right chunks for a question. Writing answers (LLM) and the REST API are not built yet; see `Latest_Plan.md`.
+Retrieval finds the right chunks for a question, and an LLM writes the answer from them. The REST API is not built yet; see `Latest_Plan.md`.
 This project is a backend only: the existing LMS provides the chat screen.
 
 ## Setup (Windows, Python 3.10+)
@@ -13,6 +13,7 @@ pip install -r requirements.txt
 ```
 Put the PDFs in `Courses/` (never modified, and not in git). Optional settings are listed in `.env.example`.
 The first indexer run downloads the embedding model and needs internet; after that it runs offline.
+No database needs installing: ChromaDB comes with `requirements.txt`, runs inside the Python app and saves to `vector_db/chroma/`.
 
 ## Run
 ```
@@ -60,8 +61,21 @@ question is matched to the examples by meaning. Add examples for wordings that a
 Latest blind-test result: 58/70 course questions (patterns only: 46/70, plain search: 36/70) and 11/14 off-topic questions
 rejected. That set has been used once, so write a new one before measuring another change. See `Latest_Plan.md` section 6.
 
-## Answers (demo, using Gemini)
-Retrieval runs on this machine. Only the question and the passages found for it go to Gemini, which writes the reply.
+## Answers with a local model (Ollama)
+Nothing leaves this machine, so this is the route for real PDFs.
+
+1. Install [Ollama](https://ollama.com) and download a model: `ollama pull gemma3:1b`
+2. Add `LLM_PROVIDER=ollama` to `.env`.
+3. Ask a question: `python -m app.generation.chatbot "How long is the Python course?"`
+
+To try another model, run `ollama pull <model>` and set `LLM_MODEL` in `.env`. No code change is needed. All settings are in
+`.env.example`. Measure speed with `python -m evaluation.llm_speed_test`, and rehearse with
+`python -m evaluation.rehearse_demo --pause 0`.
+
+**`gemma3:1b` is not ready for a demo yet.** It usually leaves out citations, so most correct answers are hidden. See Known limits.
+
+## Answers with Gemini (demo PDFs only)
+Gemini is still the default provider. Retrieval runs on this machine. Only the question and the passages found for it go to Gemini, which writes the reply.
 
 1. Create a key in Google AI Studio.
 2. Copy `.env.example` to `.env` and set `GEMINI_API_KEY`. `.env` is ignored by Git. Never commit it or paste the key anywhere.
@@ -82,7 +96,7 @@ nothing is replaced with "not available in the provided course documents".
 **The Gemini free tier is for the demo PDFs only.** Google may use free-tier prompts to improve its products, and people may
 read them. Do not send real course PDFs or student data through it. Those need a paid service or a model on our own machine.
 
-To add another provider, add a class in `app/generation/llm.py` and select it with `LLM_PROVIDER`.
+To add a paid service later, add a class in `app/generation/llm.py` and select it with `LLM_PROVIDER`.
 
 ## When a new PDF behaves badly
 1. Open `ingestion_report.md`: WARN lines say what to check.
@@ -95,7 +109,8 @@ To add another provider, add a class in `app/generation/llm.py` and select it wi
 * All 5 demo PDFs are missing their last pages; the report shows how many. Save the full page to include them.
 * Retrieval depends on recognised wording. Unusual phrasing still reaches the right course but may miss the right chunk.
 * A course removed from `Courses/` stays in the index until `--rebuild`; the indexer warns about it.
-* Answers took about 1–2 minutes in a first test on the development laptop (i3, CPU only); see `Latest_Plan.md` section 6.
+* Qwen 4B took about 1–2 minutes per answer on the development laptop (i3, CPU only); see `Latest_Plan.md` section 6.
+* `gemma3:1b` takes about 5–20 s per answer on that laptop (slowest 52 s), but matched only 5 of the 14 demo questions, mostly because it leaves out citations.
 * Three demo PDFs (Python, Machine Learning, Ethical Hacking) were saved with "What you'll learn" collapsed ("Show more"); the hidden items are not in those files. Export with the list expanded.
 * Scanned PDFs (images) have no text layer and need OCR; the report flags them.
 * Price/offer text is a snapshot; chunks state the date the page was saved.

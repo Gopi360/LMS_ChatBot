@@ -11,15 +11,14 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import time
 import urllib.error
 import urllib.request
 
 from app import config
 
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3.5:4b")
+OLLAMA_URL = config.LLM_BASE_URL.rstrip("/")
+OLLAMA_MODEL = config.LLM_MODEL
 QUESTION = "What is the total length of this course, and what does it include?"
 SYSTEM = "You are a Student Course Information Assistant. Answer using only the supplied course context. Be concise."
 
@@ -41,7 +40,8 @@ def ask(context: str, timeout: int) -> dict:
     body = {"model": OLLAMA_MODEL, "stream": False, "think": False,
             "messages": [{"role": "system", "content": SYSTEM},
                          {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {QUESTION}"}],
-            "options": {"temperature": 0.1, "presence_penalty": 0, "num_ctx": 4096, "num_predict": 300}}
+            "options": {"temperature": config.LLM_TEMPERATURE, "presence_penalty": 0, "num_ctx": config.NUM_CTX,
+                        "num_predict": config.LLM_NUM_PREDICT}}
     request = urllib.request.Request(f"{OLLAMA_URL}/api/chat", data=json.dumps(body).encode("utf-8"),
                                      headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(request, timeout=timeout) as response:
