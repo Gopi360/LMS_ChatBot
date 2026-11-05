@@ -6,3 +6,5 @@ data/extracted_text/
 .venv/
 Courses/*.pdf
 .pytest_cache/
+data/processed/
+reports/

@@ -55,6 +55,10 @@
     {"pattern": "Cancel anytime"},
     {"pattern": "This course includes our updated coding exercises so", "note": "coding-exercise promo"},
     {"pattern": "you can practice your skills as you learn\\."},
+    {"pattern": "Get your .+ certification\\.", "note": "certification promo"},
+    {"pattern": "Get ahead\\.", "note": "certification promo"},
+    {"pattern": "Boost your earning and promotion potential.*", "note": "certification promo"},
+    {"pattern": "our top-rated course, practice exam.*", "note": "certification promo"},
     {"pattern": "[,;|]", "note": "stray separator between link cells"}
   ],
 

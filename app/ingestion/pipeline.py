@@ -18,7 +18,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from app import config
 from app.ingestion.chunker import Chunk, chunk_course_page, chunk_generic
@@ -57,6 +57,10 @@ def process_pdf(path: Path, rules: dict, max_tokens: int, overlap: int, write_te
 
         for e in doc.errors:
             res.check("warn", f"Extraction error, page skipped: {e}")
+        if doc.printed_total_pages and doc.printed_total_pages > doc.page_count:
+            res.check("warn", f"The page footers say {doc.printed_total_pages} pages but this file has {doc.page_count}: "
+                              f"{doc.printed_total_pages - doc.page_count} pages were left out when the PDF was saved, so "
+                              "anything on them is not available. Save the full page again to include it.")
         low = [p.number for p in doc.pages if p.low_text and not p.error]
         if low:
             res.check("warn", f"Pages with little or no extractable text: {low}. If this is a scanned PDF it needs OCR.")
@@ -73,7 +77,8 @@ def process_pdf(path: Path, rules: dict, max_tokens: int, overlap: int, write_te
             res.curriculum = {
                 "sections_parsed": len(pc.sections),
                 "sections_stated": pc.summary["sections"] if pc.summary else None,
-                "lectures_stated_total": pc.summary["lectures"] if pc.summary else None,
+                "lectures_page_total": pc.summary["lectures"] if pc.summary else None,
+                "lectures_in_headers": sum(s.stated_lectures or 0 for s in pc.sections),
                 "lecture_rows_parsed": sum(len(s.lectures) for s in pc.sections),
             }
         else:
@@ -131,7 +136,8 @@ def build_report(results: List[DocResult], max_tokens: int) -> str:
         if r.curriculum:
             c = r.curriculum
             L.append(f"- Curriculum: {c['sections_parsed']} sections parsed (page says {c['sections_stated']}); "
-                     f"section headers total {c['lectures_stated_total']} lectures; {c['lecture_rows_parsed']} lecture rows kept")
+                     f"page total {c['lectures_page_total']} lectures; section headers add up to {c['lectures_in_headers']}; "
+                     f"{c['lecture_rows_parsed']} lecture rows kept")
         types = Counter(c.chunk_type for c in r.chunks)
         L.append("- Chunks by type: " + ", ".join(f"{k} {v}" for k, v in types.items()))
         if r.removed:
@@ -143,6 +149,17 @@ def build_report(results: List[DocResult], max_tokens: int) -> str:
     return "\n".join(L)
 
 
+def merge_previous(documents: List[dict], chunks: List[dict], previous: dict) -> Tuple[List[dict], List[dict]]:
+    """Keep the courses a partial run (--only) did not process, so it never drops them from
+    chunks.json. Everything is returned sorted by PDF name, the order of a full run."""
+    done = {d["pdf_name"] for d in documents}
+    documents = documents + [d for d in previous.get("documents", []) if d["pdf_name"] not in done]
+    chunks = chunks + [c for c in previous.get("chunks", []) if c["pdf_name"] not in done]
+    order = {name: i for i, name in enumerate(sorted(d["pdf_name"] for d in documents))}
+    return (sorted(documents, key=lambda d: order[d["pdf_name"]]),
+            sorted(chunks, key=lambda c: order[c["pdf_name"]]))
+
+
 def run(courses_dir: Path, only: Optional[str], max_tokens: int, overlap: int) -> List[DocResult]:
     rules = load_rules(config.RULES_PATH)
     pdfs = [p for p in list_pdfs(courses_dir) if not only or only.lower() in p.name.lower()]
@@ -151,16 +168,20 @@ def run(courses_dir: Path, only: Optional[str], max_tokens: int, overlap: int) -
     results = [process_pdf(p, rules, max_tokens, overlap) for p in pdfs]
 
     config.PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    chunks_path = config.PROCESSED_DIR / "chunks.json"
     all_chunks = [c.to_dict() for r in results for c in r.chunks]
+    documents = [{"pdf_name": r.pdf_name, "layout": r.layout, "status": r.status,
+                  "pages": r.doc.page_count if r.doc else None, "sha1": r.doc.sha1 if r.doc else None,
+                  "captured_raw": r.doc.captured_raw if r.doc else None, "chunks": len(r.chunks)} for r in results]
+    if only and chunks_path.exists():
+        documents, all_chunks = merge_previous(documents, all_chunks, json.loads(chunks_path.read_text(encoding="utf-8")))
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "settings": {"max_tokens": max_tokens, "overlap_tokens": overlap, "token_counts": "estimated"},
-        "documents": [{"pdf_name": r.pdf_name, "layout": r.layout, "status": r.status,
-                       "pages": r.doc.page_count if r.doc else None, "sha1": r.doc.sha1 if r.doc else None,
-                       "captured_raw": r.doc.captured_raw if r.doc else None, "chunks": len(r.chunks)} for r in results],
+        "documents": documents,
         "chunks": all_chunks,
     }
-    (config.PROCESSED_DIR / "chunks.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    chunks_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     report = build_report(results, max_tokens)
     (config.PROCESSED_DIR / "ingestion_report.md").write_text(report, encoding="utf-8")
     return results

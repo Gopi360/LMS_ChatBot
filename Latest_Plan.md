@@ -1,9 +1,7 @@
 # Project: LMS Student Course Information Chatbot — Handoff Plan (v2)
 
-> **For Claude (new conversation):** read this whole file first. Phases 1–2 are already built and tested
-> (see section 4); do **not** rebuild them. The user will upload `LMS_ChatBot_phase2.zip` (the working
-> project) and `ingestion_report.md`. Start by confirming the user approves Phase 2, then work on
-> **Phase 3**, one phase at a time, and wait for approval after each phase.
+> **Read this whole file first.** Section 4 shows which phases are built; do **not** rebuild them.
+> Work one phase at a time and wait for approval after each phase.
 
 ---
 
@@ -13,7 +11,8 @@ Build a locally hosted AI chatbot that answers candidate questions about courses
 extracted from course PDF documents. It will later be integrated into an existing Learning Management
 System (LMS).
 
-- No frontend. Expose **REST API endpoints** the LMS can call.
+- **No frontend, decided.** The LMS already exists. We deliver the backend, its REST APIs and the project; the LMS team
+  connects it to their system (section 10).
 - Use **Retrieval-Augmented Generation (RAG)**: retrieve relevant chunks from the course PDFs, generate
   the answer with a **local LLM**.
 - The bot must answer **only** from the documents. No invented fees, durations, instructors,
@@ -26,7 +25,7 @@ System (LMS).
 
 - OS: Windows. IDE: Antigravity. Language: Python 3.10+.
 - CPU: Intel Core i3. RAM: 12 GB. GPU: Intel UHD (integrated only). **No NVIDIA GPU.**
-- LLM runtime: Ollama. Installed model: Qwen3 4B. **Verify the exact tag with `ollama list`**, never assume.
+- LLM runtime: Ollama 0.40. Installed model tag: **`qwen3.5:4b`** (4.2B, Q4_K_M, 3.3 GB). Re-check with `ollama list` on any new machine.
 - Optimise for CPU inference: small context window, no parallel LLM requests, low memory, short answers.
 
 ## 3. Technology stack
@@ -37,7 +36,7 @@ System (LMS).
 | Cleaning / chunking | custom Python (already built) |
 | Embeddings | `sentence-transformers/all-MiniLM-L6-v2` (local) |
 | Vector DB | ChromaDB, persistent under `vector_db/chroma/` |
-| LLM | Ollama + Qwen3 4B (Ollama Python client) |
+| LLM | Ollama + `qwen3.5:4b` (Ollama Python client) |
 | API | FastAPI + Uvicorn |
 | RAG framework | none at first (custom Python); keep modules separable so one can be added later |
 
@@ -48,10 +47,10 @@ Do not add libraries without a clear need.
 | Phase | Status |
 |---|---|
 | 1. PDF inspection and extraction | **Done** (built into `pdf_loader.py`) |
-| 2. Cleaning and chunking | **Done and tested; awaiting user approval** |
-| 3. Embeddings + ChromaDB | **Next** |
-| 4. Retrieval | to do |
-| 5. LLM integration (RAG) | to do |
+| 2. Cleaning and chunking | **Done and tested** |
+| 3. Embeddings + ChromaDB | **Done and tested** |
+| 4. Retrieval | **Done and tested; awaiting user approval** |
+| 5. LLM integration (RAG) | **Built for the demo with Gemini; not yet tested with a real key.** Qwen waits for better hardware |
 | 6. FastAPI backend | to do |
 | 7. Testing and evaluation | to do |
 
@@ -69,16 +68,25 @@ LMS_ChatBot/
       course_page_parser.py     adapter for saved-course-page layout: facts, lists, curriculum + validation
       chunker.py                structure-aware chunks + generic fallback layout
       pipeline.py               runs everything -> chunks.json + ingestion_report.md
+      indexer.py                chunks.json -> ChromaDB; updates only what changed
+    retrieval/
+      embeddings.py             all-MiniLM-L6-v2 on CPU, shared by indexing and questions
+      retriever.py              routes a question by course and type, then searches; has a CLI
   config/ingestion_rules.json   boilerplate patterns, known headings, thresholds
+  config/retrieval_rules.json   course short names and question types
   data/extracted_text/*.txt     debug dumps with "--- PAGE n ---" (outputs, never edited by hand)
-  data/processed/chunks.json    THE INPUT FOR PHASE 3
+  data/processed/chunks.json    the input for the indexer
   data/processed/ingestion_report.md
-  tests/test_pipeline.py        run: python -m tests.test_pipeline
-  requirements.txt              currently only pymupdf
+  evaluation/llm_speed_test.py  measures answer time on this machine
+  evaluation/evaluate_retrieval.py + retrieval_questions.json   retrieval score, dev and held-out
+  tests/                        run: python -m pytest tests -q
+  vector_db/chroma/             the index (generated, not in git)
+  requirements.txt              pinned to the tested versions
   README.md
 ```
 
-Run: `python -m app.ingestion.pipeline` (all PDFs) or `--only Java`.
+Run: `python -m app.ingestion.pipeline` (all PDFs) or `--only Java`, then `python -m app.ingestion.indexer`.
+Try a question: `python -m app.retrieval.retriever "How long is the Python course?"`
 
 ### The five demo courses (Udemy course pages saved as PDF, captured 2026-11-03)
 
@@ -90,7 +98,7 @@ Run: `python -m app.ingestion.pipeline` (all PDFs) or `--only Java`.
 | Machine_Learning.pdf | 23 | 92 |
 | The_Complete_Python_Bootcamp.pdf | 11 | 36 |
 
-Total 304 chunks, all ≤ ~220 estimated tokens.
+Total 304 chunks. Real tokenizer: average 141, maximum 243, against the model's limit of 256, so nothing is truncated.
 
 ### `chunks.json` format
 
@@ -149,10 +157,71 @@ Price: ₹459.00 (list price ₹3,199.00, 86% off). This is the price shown when
   hidden items are not in those files (report shows a WARN). For the real PDFs, export with lists expanded.
 - Section lecture counts include role plays (AWS: headers sum to 296 vs page total 277); the report explains this
   as INFO. Some section titles/lecture titles are cut off by the source page itself; that is kept as is.
-- Token counts are **estimates** (the embedding model was not loaded in Phase 2). Phase 3 must check real token
-  counts with the model tokenizer and lower `CHUNK_MAX_TOKENS` if any chunk exceeds 256.
+- `tokens_est` runs low: the highest real count is 243 where the highest estimate is 219. The indexer prints real counts
+  on every run and warns above 256. Watch this with the real PDFs, because the margin is only 13 tokens.
 - Scanned (image-only) PDFs need OCR; the report flags pages with no text.
-- Retrieval quality is **not yet tested**.
+- All 5 demo PDFs are missing their last 6–9 pages (footers say 1/21, the file has 15 pages), which is probably why there
+  are no `instructor` chunks. The report now warns about this. Questions about instructor backgrounds cannot be answered.
+
+### Measured retrieval quality (Phase 4, `evaluation/evaluate_retrieval.py`)
+
+Latest score on a blind set: 70 course questions and 14 off-topic ones, written by a separate agent that could not see the
+routing rules, the example questions or the older questions. It was run once, after the code and cutoffs were fixed. A pass
+means the right chunk was retrieved, not that an answer was written.
+
+| | Plain search | Patterns only | Patterns + example questions |
+|---|---:|---:|---:|
+| Course questions passed | 36/70 (51%) | 46/70 (66%) | **58/70 (83%)** |
+| Off-topic questions rejected | not applicable | 11/14 | **11/14** |
+| Average chunks per question | 4.0 | 3.1 | 2.7 |
+| Approx. context tokens, average | 512 | 408 | 372 |
+| Approx. context tokens, largest | 896 | 1,106 | 1,349 |
+
+Example questions gained 13 and lost 1 ("will aws get me thru the CLF-C02 exam"). By question type: topic 10/10,
+instructor 9/10, audience 9/10, curriculum list 8/10, duration and price 8/10, requirements 7/10, outcomes 7/10.
+
+This set is harder than the previous ones, on purpose: about a third of it is casual chat wording. **The earlier 24/30 (80%)
+must not be compared with 58/70 (83%).** The fair comparison is 46/70 to 58/70 on the same questions. This set has now been
+seen, so it is spent as a test: any further tuning against it makes the 83% unfair, and the next change needs a new blind set.
+The older held-out sets joined dev. Dev is 199 questions after removing near-copies of the blind set, and its score
+(160/174, 22/25) is not a quality figure.
+
+Known limits:
+- **Course words used as ordinary words:** 3 of the 14 off-topic questions were accepted ("how much does a ball python cost
+  as a pet", two about Java the island), because naming a course lowers the cutoff. This was not addressed by example questions.
+- **Wording that still misses:** examples fire only on a strong match, so some phrasings stay broad ("whats the ml course
+  going for rn"). Some "how much" questions are taken for price by a pattern ("How much RAM should my laptop have…"), and
+  patterns are never overridden.
+- **The full course title alone:** "Machine Learning A-Z" with no "the" or "course" is not treated as clearly naming the
+  course, so such questions stay broad (at least 2 of the 12 misses). The rule exists so that "Is Python free?" stays broad.
+- **An outline found by example also runs a normal search,** because a topic question can sound like an outline request.
+  This protects the answer, but those are the largest contexts (up to about 1,350 tokens), which matters on a slow machine.
+- **Example cutoffs (0.55 score, 0.03 lead)** were tuned on dev and on these 5 demo courses. Re-measure with the real PDFs.
+- **The no-course cutoff is thin:** 0.445, with one real question at 0.448 in the final test. A cutoff set too high
+  rejects real questions, so re-measure it with the real PDFs.
+- **Aliases are per course:** `config/retrieval_rules.json` lists the 5 demo courses. The real PDFs need new entries, and
+  every score here must be measured again on them.
+
+### Measured LLM speed (i3-1005G1, CPU only, `evaluation/llm_speed_test.py`)
+
+Different chunks on every run, about 1,100 prompt tokens, thinking off, model already loaded. A pip download was running
+at the same time, so re-measure when the machine is idle.
+
+| Answer length | Read prompt | Write answer | Total |
+|---:|---:|---:|---:|
+| 79 tokens | 41 s | 18 s | 62 s |
+| 204 tokens | 42 s | 50 s | 94 s |
+| 300 tokens (hit the cap) | 46 s | 69 s | 117 s |
+
+Reading runs at about 25 tokens/s and writing at about 4.4 tokens/s. Loading a cold model adds about 19 s. Repeating an
+identical prompt took 24 s only because Ollama reused its cache, so that is not a realistic figure. Free RAM was 1.4–2.2 GB
+of 11.8 GB, so close other apps during a demo.
+
+**Machine stability risk:** the development laptop restarted uncleanly 7 times between 2026-10-29 and 2026-11-04, including twice during a speed test. It also happened before this project used the LLM, so the cause is not proven. The stop codes (0x7A, 0x154) can point to paging, disk or memory faults, and Windows logged 2 bad-block errors. Do not rely on this laptop for the manager demo until that is checked.
+
+Routing already cut the average context from about 538 to 364 tokens. Further options, to decide from Phase 5 tests: cap
+answers near 120 tokens, stream the answer so the first words appear sooner, keep the model loaded (`keep_alive`), and run
+on the new laptop.
 
 ## 7. Remaining phases
 
@@ -165,8 +234,9 @@ Price: ₹459.00 (list price ₹3,199.00, 86% off). This is the price shown when
    (also keep `body` in metadata or a separate field), metadata = `course_name, pdf_name, page, page_end,
    section, chunk_type, captured_on, source_sha1, content_hash`. **Metadata values must be str/int/float/bool;
    drop keys whose value is null.**
-5. No duplicates on re-index: upsert by `chunk_id`. Updating a PDF: if its `source_sha1` changed, delete all
-   chunks of that `pdf_name`, then add the new ones (also handles chunks that no longer exist). Support a full rebuild.
+5. No duplicates on re-index: upsert by `chunk_id`. If a course's chunk ids, `content_hash` or `source_sha1` changed, delete
+   all chunks of that `pdf_name`, then add the new ones. Content hashes matter because a rule change alters chunks while the
+   PDF stays the same. A PDF with status FAIL keeps its old chunks, and `--rebuild` refuses to run while one exists.
 6. Test: collection count equals chunks.json (304 for the demo); re-run twice and confirm count unchanged;
    change one PDF and confirm only that course is replaced.
 7. Deliverables: `embeddings.py`, `indexer.py`, persistent collection, README update, a small test. **Stop for approval.**
@@ -190,9 +260,22 @@ Price: ₹459.00 (list price ₹3,199.00, 86% off). This is the price shown when
 7. Deliverables: `retriever.py`, retrieval test script. **Stop for approval.**
 
 ### Phase 5: LLM integration and RAG
-1. Ollama Python client; model tag from `ollama list`. Qwen3 4B on CPU: **turn off thinking mode**
-   (use the `think=False` option if the installed Ollama supports it, otherwise `/no_think`); temperature ≈ 0.1;
-   cap output length (`num_predict` ≈ 300); modest `num_ctx` (≈ 3072–4096). One LLM request at a time (lock/queue).
+**Demo status:** the answer step exists in `app/generation/` (`llm.py`, `prompts.py`, `chatbot.py`), using Gemini
+(`gemini-3.8-flash`) instead of Ollama, so the demo does not need new hardware. Gemini is a stand-in: its answers say nothing
+about how Qwen 4B would perform, and its free tier must not receive real PDFs or student data. It is tested with stand-ins for
+the model and with real SDK failures, but no real answer has been generated yet. Qwen remains to be added as a provider using
+the steps below. Follow-ups use the cheap approach: a question that names no course keeps the last course as a search filter.
+The question itself is never rewritten, so it is still scored in the student's own words. On a hand-written list of 21 real
+follow-ups and 12 off-topic ones, 19 and 10 behaved correctly. This is a small list, not a quality score. Very short questions
+with "it" reach the model even if off-topic ("How do I cook it?"), and the prompt must then reply that the documents do not say.
+"Do I get a certificate?" and "Can I run it on AWS?" are rejected as follow-ups. Name the course to ask them.
+
+1. Ollama Python client, model tag `qwen3.5:4b` from config. The model's defaults do not suit this job, so set all of
+   these on every request: `think=False` (thinking is on by default), `temperature` ≈ 0.1 (default 1),
+   `presence_penalty` 0 (default 1.5, which pushes the model away from repeating exact facts), `num_ctx` ≈ 3072–4096
+   (the model's maximum is 262,144). One LLM request at a time (lock/queue).
+   **Speed is the main constraint; see "Measured LLM speed" in section 6.** Keep the context small, cap `num_predict`
+   well below 300 and stream the answer.
 2. Pass only the retrieved chunks as context, each labelled with its source (document + page).
 3. Use the controlled system prompt (section 8). Add: answer in clear English, concise.
 4. Source references in the response are built **from the retrieved chunk metadata**, not from what the model writes.
@@ -204,7 +287,7 @@ Price: ₹459.00 (list price ₹3,199.00, 86% off). This is the price shown when
 8. Deliverables: `llm.py`, `prompts.py`, working command-line chatbot. Test, then **stop for approval.**
 
 ### Phase 6: FastAPI backend
-Endpoints: `POST /api/v1/chat`, `GET /api/v1/health`, `POST /api/v1/ingest`.
+Endpoints: `POST /api/v1/chat`, `GET /api/v1/health`, `POST /api/v1/ingest`. Section 10 describes how the LMS connects.
 
 Chat request:
 ```json
@@ -222,7 +305,10 @@ Chat response:
   runs the Phase 2 pipeline, then re-indexes only changed PDFs, and returns the ingestion report summary.
   Ordinary students must not be able to modify the knowledge base.
 - `/health`: check Ollama reachable, the model present, Chroma collection count.
-- Handle errors with proper HTTP codes and logging; serialize LLM calls (one at a time); configurable CORS for the LMS.
+- Handle errors with proper HTTP codes and logging; serialize LLM calls (one at a time).
+- Use the retrieval flags: `in_scope=false` returns a fixed refusal with no LLM call (fast), and `needs_course=true` asks
+  the student which course they mean.
+- Optional `course` field on chat requests: when a student is on a course page, the LMS sends it and course detection is skipped.
 - Deliverables: `routes.py`, `main.py`, API documentation (FastAPI docs + README section). **Stop for approval.**
 
 ### Phase 7: Testing and evaluation
@@ -260,17 +346,34 @@ Mention the source document and page number whenever possible.
 7. Proper error handling and logging.
 8. **Do not move to the next phase until the current one is tested and the user approves.**
 
-## 10. Real PDFs later (production)
+## 10. LMS integration
+
+We deliver a backend service. The LMS keeps its own chat screen and calls our API.
+
+```
+Student -> LMS web page -> LMS backend -> POST /api/v1/chat (with API key) -> our service -> Ollama + ChromaDB
+```
+
+**Recommended: the LMS backend calls our API, not the browser.** Pros: the API key stays secret, the LMS confirms who the
+student is, and CORS is not needed. Cons: the LMS team writes one small forwarding endpoint. Direct browser calls need no
+LMS backend work, but would expose the key and let anyone send a fake `student_id`.
+
+**Delivered to the LMS team:** the code, `.env.example`, a Dockerfile, the OpenAPI spec at `/docs`, sample requests and an
+integration guide.
+
+**To confirm with the LMS team:**
+1. LMS technology, and where it is hosted.
+2. Where our service will run. It needs a machine for Ollama, reachable from the LMS.
+3. Timeouts: answers take over a minute on weak hardware, so the LMS must wait long enough or use streaming.
+4. How many students may ask at once. LLM calls run one at a time, so a busy period forms a queue.
+5. Whether the LMS can send the current course with each request.
+6. Who uploads new PDFs, and how.
+
+## 11. Open decisions
+
+1. **Re-save the 5 demo PDFs?** Recommended: yes, unless the real PDFs arrive soon. It restores the missing pages and collapsed lists.
+
+## 12. Real PDFs later (production)
 
 The real PDFs may not look like Udemy pages. After each upload: run the pipeline, read `ingestion_report.md`,
 fix with rules or a new adapter if needed. Don't change retrieval/LLM code for layout problems.
-
----
-
-## Starter message to paste in the new Claude conversation
-
-Upload `Plan.md`, `LMS_ChatBot_phase2.zip` and `ingestion_report.md`, then send:
-
-> Read Plan.md fully. Phases 1–2 are done and approved (project in the attached zip). Unzip it, run
-> `python -m tests.test_pipeline` to confirm it works, then start **Phase 3 only** (embeddings + ChromaDB). Follow
-> the development rules in the plan, test everything, show me the results, and wait for my approval before Phase 4.
