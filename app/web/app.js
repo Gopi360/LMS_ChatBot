@@ -16,16 +16,19 @@
   var HEALTH_POLL_IDLE_MS = 60000;
   var VIEW_KEY = "course-assistant.presenter";
   var NEAR_BOTTOM_PX = 96;
+  var REVEAL_MARGIN_PX = 16;
+  var AVATAR_PATH = "M10 5.5C8.5 4.300 6.5 4 4 4v10.5c2.5 0 4.5.3 6 1.5 1.5-1.200 3.5-1.5 6-1.5V4c-2.5 0-4.5.3-6 1.5zm0 0V16";
+  var ALERT_PATH = "M10 2.5 18.5 17h-17zM10 8v4.5M10 15v.5";
 
   var STATUS = {
     answered: { title: "Answered" },
-    not_found: { title: "Not found in the documents", tone: "honest", icon: "page" },
-    out_of_scope: { title: "Outside these courses", tone: "honest", icon: "page" },
-    needs_course: { title: "Asked which course", tone: "question", icon: "question" },
-    unavailable: { title: "Could not answer", note: "No answer this time", tone: "problem", icon: "alert", retry: true }
+    not_found: { title: "Not found in the documents" },
+    out_of_scope: { title: "Outside these courses" },
+    needs_course: { title: "Asked which course" },
+    unavailable: { title: "Could not answer", failed: true }
   };
 
-  var EMPTY_CARD_TEXT = {
+  var NO_SOURCES_TEXT = {
     answered: "This reply did not need a passage from a document.",
     not_found: "No passage answered this, so nothing was made up.",
     out_of_scope: "The question did not match any course, so no document was used.",
@@ -34,7 +37,7 @@
   };
 
   var el = {
-    book: document.documentElement,
+    root: document.documentElement,
     scroller: document.getElementById("scroller"),
     welcome: document.getElementById("welcome"),
     log: document.getElementById("log"),
@@ -47,6 +50,7 @@
     jump: document.getElementById("jump"),
     service: document.getElementById("service"),
     serviceLabel: document.getElementById("service-label"),
+    serviceMore: document.getElementById("service-more"),
     serviceDetail: document.getElementById("service-detail"),
     announcer: document.getElementById("announcer"),
     starters: document.getElementById("starters")
@@ -55,9 +59,7 @@
   var state = {
     sessionId: null,
     pending: null,
-    questionCount: 0,
-    stickToBottom: true,
-    isLocal: false
+    stickToBottom: true
   };
 
   /* Storage: every read and write can throw in a private window. */
@@ -96,25 +98,22 @@
     return node;
   }
 
-  function makeIcon(name) {
+  function makeSvg(pathData) {
     var ns = "http://www.w3.org/2000/svg";
     var svg = document.createElementNS(ns, "svg");
     svg.setAttribute("viewBox", "0 0 20 20");
     svg.setAttribute("aria-hidden", "true");
-    var shapes = {
-      page: "M4 2h8l4 4v12H4zM7 9h6M7 12h6M7 15h3",
-      question: "M6.5 7a3.5 3.5 0 1 1 5.2 3c-1 .6-1.7 1.3-1.7 2.5M10 16v.5",
-      alert: "M10 2.5 18.5 17h-17zM10 8v4.5M10 15v.5"
-    };
     var path = document.createElementNS(ns, "path");
-    path.setAttribute("d", shapes[name]);
-    path.setAttribute("fill", "none");
-    path.setAttribute("stroke", "currentColor");
-    path.setAttribute("stroke-width", "2");
-    path.setAttribute("stroke-linecap", "round");
-    path.setAttribute("stroke-linejoin", "round");
+    path.setAttribute("d", pathData);
     svg.appendChild(path);
     return svg;
+  }
+
+  function makeAvatar() {
+    var avatar = make("span", "avatar");
+    avatar.setAttribute("aria-hidden", "true");
+    avatar.appendChild(makeSvg(AVATAR_PATH));
+    return avatar;
   }
 
   function announce(text) {
@@ -214,7 +213,7 @@
     return seconds.toFixed(1) + " s";
   }
 
-  function cardTitle(status, count) {
+  function sourcesTitle(status, count) {
     var title = (STATUS[status] || STATUS.answered).title;
     if (status === "answered" && count > 0) {
       return title + " from " + count + (count === 1 ? " passage" : " passages");
@@ -228,8 +227,10 @@
 
     var body = make("div");
     body.appendChild(make("p", "source-course", source.course_name || "Course document"));
-    if (source.section) { body.appendChild(make("p", "source-section", source.section)); }
-    if (source.document) { body.appendChild(make("p", "source-document", source.document)); }
+    var meta = make("p", "source-meta");
+    if (source.section) { meta.appendChild(make("span", "", source.section)); }
+    if (source.document) { meta.appendChild(make("span", "", source.document)); }
+    body.appendChild(meta);
     row.appendChild(body);
 
     var pages = pagesText(source);
@@ -237,77 +238,62 @@
     return row;
   }
 
-  function buildEvidence(status, sources, seconds) {
-    var wrap = make("div", "evidence");
-    var clip = make("div", "evidence-clip");
-    var card = make("section", "card");
-    card.setAttribute("aria-label", "Where this reply came from");
+  function buildSources(status, sources, seconds) {
+    var panel = make("section", "sources");
+    panel.setAttribute("aria-label", "Where this reply came from");
 
-    var head = make("div", "card-head");
-    head.appendChild(make("p", "card-title", cardTitle(status, sources.length)));
+    var head = make("div", "sources-head");
+    head.appendChild(make("p", "sources-title", sourcesTitle(status, sources.length)));
     var time = secondsText(seconds);
-    if (time) { head.appendChild(make("p", "card-time", time)); }
-    card.appendChild(head);
+    if (time) { head.appendChild(make("p", "sources-time", time)); }
+    panel.appendChild(head);
 
     if (sources.length) {
-      var list = make("ol");
+      var list = make("ol", "sources-list");
       sources.forEach(function (source) { list.appendChild(buildSource(source)); });
-      card.appendChild(list);
+      panel.appendChild(list);
     } else {
-      card.appendChild(make("p", "card-empty", EMPTY_CARD_TEXT[status] || EMPTY_CARD_TEXT.answered));
+      panel.appendChild(make("p", "sources-empty", NO_SOURCES_TEXT[status] || NO_SOURCES_TEXT.answered));
     }
-
-    clip.appendChild(card);
-    wrap.appendChild(clip);
-    return wrap;
+    return panel;
   }
 
-  /* Entries. */
+  /* Entries: the student's bubble, then the assistant's turn. */
 
   function createEntry(question) {
-    state.questionCount += 1;
     var entry = make("article", "entry");
-
-    var number = make("div", "entry-number", String(state.questionCount));
-    number.setAttribute("aria-hidden", "true");
-    entry.appendChild(number);
 
     var asked = make("p", "question");
     asked.appendChild(make("span", "visually-hidden", "You asked: "));
     asked.appendChild(document.createTextNode(question));
     entry.appendChild(asked);
 
-    var reply = make("div", "reply");
-    entry.appendChild(reply);
+    var turn = make("div", "turn");
+    turn.appendChild(makeAvatar());
+    var reply = make("div", "turn-body");
+    turn.appendChild(reply);
+    entry.appendChild(turn);
+
     el.log.appendChild(entry);
     return { node: entry, reply: reply, question: question };
   }
 
-  function clearReply(entry) {
-    entry.reply.replaceChildren();
-    entry.reply.removeAttribute("data-tone");
-    var old = entry.node.querySelector(".evidence");
-    if (old) { old.remove(); }
-  }
-
   function showWaiting(entry) {
-    clearReply(entry);
+    entry.reply.replaceChildren();
     var box = make("div", "waiting");
-    // The live announcer speaks for this block, so the log must not read the ticking count.
+    // The announcer speaks for this block, so the log must not read the ticking count.
     box.setAttribute("aria-hidden", "true");
 
-    var reader = make("div", "reader");
-    reader.appendChild(make("span"));
-    reader.appendChild(make("span"));
-    reader.appendChild(make("span"));
-    box.appendChild(reader);
+    var dots = make("span", "dots");
+    dots.appendChild(make("span"));
+    dots.appendChild(make("span"));
+    dots.appendChild(make("span"));
+    box.appendChild(dots);
 
-    var words = make("div");
-    var title = make("p", "waiting-title", "Reading the course documents");
-    var time = make("p", "waiting-time", "0 seconds so far");
-    words.appendChild(title);
-    words.appendChild(time);
-    box.appendChild(words);
+    var title = make("span", "waiting-title");
+    var time = make("span", "waiting-time", "0 s");
+    box.appendChild(title);
+    box.appendChild(time);
 
     entry.reply.appendChild(box);
     announce("Reading the course documents.");
@@ -315,7 +301,7 @@
   }
 
   function tickWaiting(view, seconds) {
-    view.time.textContent = seconds + (seconds === 1 ? " second so far" : " seconds so far");
+    view.time.textContent = seconds + " s";
     if (seconds === STILL_READING_AFTER_S) {
       view.title.textContent = "Still reading the course documents";
       announce("Still reading the course documents.");
@@ -325,15 +311,13 @@
     }
   }
 
-  function addNote(entry, info) {
-    var note = make("p", "note");
-    note.appendChild(makeIcon(info.icon));
-    note.appendChild(document.createTextNode(info.note));
-    entry.reply.appendChild(note);
-  }
+  function addErrorRow(entry, message) {
+    var row = make("div", "error-row fade-in");
+    var text = make("p", "error-text");
+    text.appendChild(makeSvg(ALERT_PATH));
+    text.appendChild(make("span", "", message));
+    row.appendChild(text);
 
-  function addRetry(entry) {
-    var actions = make("div", "reply-actions");
     var button = make("button", "retry", "Retry");
     button.type = "button";
     button.disabled = Boolean(state.pending);
@@ -341,52 +325,43 @@
       if (state.pending) { return; }
       runQuestion(entry);
     });
-    actions.appendChild(button);
-    entry.reply.appendChild(actions);
+    row.appendChild(button);
+    entry.reply.appendChild(row);
   }
 
   function showReply(entry, data) {
-    clearReply(entry);
+    entry.reply.replaceChildren();
     var status = STATUS[data.status] ? data.status : "answered";
-    var info = STATUS[status];
     var sources = Array.isArray(data.sources) ? data.sources : [];
     var answer = typeof data.answer === "string" && data.answer.trim()
       ? data.answer
       : "No text came back for this question.";
 
-    if (info.tone) { entry.reply.dataset.tone = info.tone; }
-    if (info.note) {
-      addNote(entry, info);
-    } else if (info.icon) {
-      entry.reply.appendChild(makeIcon(info.icon));
+    if (STATUS[status].failed) {
+      addErrorRow(entry, answer);
+    } else {
+      var body = make("div", "fade-in");
+      var clean = make("div", "answer answer-clean");
+      renderLines(clean, answer, fillPlain);
+      body.appendChild(clean);
+
+      var cited = typeof data.cited_answer === "string" ? data.cited_answer : "";
+      if (cited.trim() && sources.length) {
+        var numbers = sources.map(function (source) { return source.number; });
+        var marked = make("div", "answer answer-cited");
+        renderLines(marked, cited, function (node, line) { appendCited(node, line, numbers); });
+        body.appendChild(marked);
+        clean.classList.add("has-cited");
+      }
+      entry.reply.appendChild(body);
     }
 
-    var body = make("div", "reply-body");
-    entry.reply.appendChild(body);
-
-    var clean = make("div", "answer answer-clean");
-    renderLines(clean, answer, fillPlain);
-    body.appendChild(clean);
-
-    var cited = typeof data.cited_answer === "string" ? data.cited_answer : "";
-    if (cited.trim() && sources.length) {
-      var numbers = sources.map(function (source) { return source.number; });
-      var marked = make("div", "answer answer-cited");
-      renderLines(marked, cited, function (node, line) { appendCited(node, line, numbers); });
-      body.appendChild(marked);
-      clean.classList.add("has-cited");
-    }
-
-    if (info.retry) { addRetry(entry); }
-    entry.node.appendChild(buildEvidence(status, sources, data.seconds));
+    entry.reply.appendChild(buildSources(status, sources, data.seconds));
   }
 
   function showFailure(entry, message) {
-    clearReply(entry);
-    entry.reply.dataset.tone = "problem";
-    addNote(entry, { icon: "alert", note: "No answer this time" });
-    entry.reply.appendChild(make("p", "answer", message));
-    addRetry(entry);
+    entry.reply.replaceChildren();
+    addErrorRow(entry, message);
     announce(message);
   }
 
@@ -406,7 +381,7 @@
     var box = el.scroller;
     var top = entry.node.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
     if (entry.node.offsetHeight > box.clientHeight) {
-      box.scrollTop = top;
+      box.scrollTop = top - REVEAL_MARGIN_PX;
     } else {
       scrollToEnd();
     }
@@ -547,7 +522,6 @@
     el.log.replaceChildren();
     el.welcome.hidden = false;
     el.jump.hidden = true;
-    state.questionCount = 0;
     state.stickToBottom = true;
     el.scroller.scrollTop = 0;
     el.input.value = "";
@@ -562,7 +536,7 @@
   function syncInput() {
     var input = el.input;
     input.style.height = "auto";
-    input.style.height = input.scrollHeight + 3 + "px";
+    input.style.height = input.scrollHeight + "px";
 
     var length = input.value.length;
     el.counter.hidden = length < COUNTER_FROM;
@@ -574,20 +548,19 @@
   /* Presenter view. */
 
   function setPresenter(on) {
-    el.book.dataset.view = on ? "presenter" : "student";
+    el.root.dataset.view = on ? "presenter" : "student";
     el.presenter.checked = on;
-    el.serviceDetail.hidden = !on || !el.serviceDetail.textContent;
   }
 
   /* Service status. */
 
   var healthTimer = null;
 
-  function setService(mode, label, detail) {
+  function setService(mode, label, more, detail) {
     el.service.dataset.state = mode;
     if (el.serviceLabel.textContent !== label) { el.serviceLabel.textContent = label; }
-    el.serviceDetail.textContent = detail || "";
-    el.serviceDetail.hidden = !detail || el.book.dataset.view !== "presenter";
+    if (el.serviceMore.textContent !== more) { el.serviceMore.textContent = more; }
+    el.serviceDetail.textContent = detail;
   }
 
   function scheduleHealth(delay) {
@@ -604,7 +577,7 @@
       var health = await response.json();
       applyHealth(health);
     } catch (error) {
-      setService("offline", "Offline", "");
+      setService("offline", "Offline", "", "");
       scheduleHealth(HEALTH_POLL_BUSY_MS);
     } finally {
       window.clearTimeout(timeout);
@@ -612,22 +585,21 @@
   }
 
   function applyHealth(health) {
-    state.isLocal = health.provider === "ollama";
     var parts = [];
     if (health.model) { parts.push("Model: " + health.model); }
     if (typeof health.index_chunks === "number") {
       parts.push(health.index_chunks + " passages, " + health.courses + " courses");
     }
-    var detail = parts.join("\n");
+    var detail = parts.join(". ");
 
     if (health.warming) {
-      setService("warming", "Getting ready", detail);
+      setService("warming", "Getting ready", "", detail);
       scheduleHealth(HEALTH_POLL_BUSY_MS);
     } else if (health.status !== "ok" || health.llm_ready === false) {
-      setService("degraded", "Not fully ready", detail);
+      setService("degraded", "Not fully ready", "", detail);
       scheduleHealth(HEALTH_POLL_BUSY_MS);
     } else {
-      setService("ready", state.isLocal ? "Ready, running on this laptop" : "Ready", detail);
+      setService("ready", "Ready", health.provider === "ollama" ? ", running on this laptop" : "", detail);
       scheduleHealth(HEALTH_POLL_IDLE_MS);
     }
   }
@@ -655,7 +627,7 @@
   });
 
   el.starters.addEventListener("click", function (event) {
-    var button = event.target.closest(".starter");
+    var button = event.target.closest(".chip");
     if (button) { ask(button.textContent); }
   });
 

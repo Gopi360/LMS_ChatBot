@@ -9,7 +9,7 @@
 | Add friendly replies after the panel is tested by hand | Fixed replies, not the model. A 1.7B model must not write free chat | User, 2026-11-06 |
 | Panel first, answer fixes later | The user presents the panel, and the bot is good enough for that | User, 2026-11-06 |
 | Panel design: one offline page served by FastAPI | Reuses the API the LMS needs anyway. No build step, and no internet needed | Built |
-| Panel look: a student's exercise book | Green cover, ruled page, margin numbers. Presenter view shows highlighted sources | Built |
+| Panel look: a simple dark AI chat window | The user rejected the exercise-book design. Bubbles, typing dots, rounded input, like other AI tools, without copying any brand | User, 2026-11-06 |
 | Answer cache, later | Reuse only if the passages match and similarity is about 0.90 or more. Similarity alone is unsafe | User: postponed |
 | Answer only from the PDFs | No invented fees, durations or instructors | Project rule |
 | We do not train the model | Knowledge comes from search, so new PDFs need no retraining | Technical |

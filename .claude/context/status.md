@@ -101,6 +101,6 @@ Repo: https://github.com/Gopi360/LMS_ChatBot (public).
 - `LLM_PROVIDER` defaults to `gemini`, so a machine with a Gemini key and no setting sends passages to Google. Change the default
   before real PDFs arrive.
 - A second review of the panel found these, not yet fixed: Retry after a "which course?" reply loses the first question; a failed
-  startup needs a server restart; empty questions wait for the lock; the page hard-codes the course list and the 500-character limit.
+  startup needs a server restart; empty questions wait for the lock; the page hard-codes the 500-character limit.
 - The API has no key yet. It listens on this laptop only. The LMS connection needs a key first.
 - The latest review fixes on `fix/qwen-answer-quality` and `feat/demo-chat-panel` had no second independent review.
