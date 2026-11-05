@@ -52,7 +52,7 @@ RETRIEVAL_MIN_INTENT_MARGIN = float(os.getenv("RETRIEVAL_MIN_INTENT_MARGIN", 0.0
 # Gemini's free tier is for the demo only: see app/generation/llm.py before using real PDFs.
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")      # gemini or ollama
 # The local model. To change it: ollama pull <model>, then set LLM_MODEL. No code change is needed.
-LLM_MODEL = os.getenv("LLM_MODEL", "gemma3:1b")
+LLM_MODEL = os.getenv("LLM_MODEL", "qwen3:1.7b")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://localhost:11434")
 # Prompt plus answer must fit. A typical prompt is about 700 tokens, but outlines of several courses are
 # far larger, and those are refused rather than cut. See OllamaGenerator.

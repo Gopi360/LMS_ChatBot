@@ -49,6 +49,11 @@ Reply statuses: `answered`, `not_found`, `out_of_scope`, `needs_course`, `unavai
 - **A follow-up is in scope if** it scores 0.40 against course text, or 0.50 against an example, or has "it" in 5 words or fewer.
 - **An answer with no valid citation is not shown.** It cannot be checked, so it becomes `not_found`.
 - **A reply that stopped early is an error,** not a partial answer.
+- **Copied passage labels are removed and never count as citations,** because the number says nothing about the words after it.
+- **A citation at the start of a line moves to its end.** Small models often write it first.
+- **A bracket starting with 3 or more digits is not a citation,** so "[2026]" stays in a course title.
+- **The course list comes from the index,** not the model. Only a question that asks for nothing else qualifies, so "courses at Harvard" does not.
+- **A plain outline request ("List all sections") follows the remembered course** without a score, because it is too short to score well.
 
 ## Commands
 

@@ -17,6 +17,8 @@
   "course_word_after_alias": "\\s+((programming|coding|online)\\s+)?(courses?|bootcamp|masterclass|class|program|programme|training)\\b",
   "clear_course_word": "\\b(courses?|bootcamp|masterclass|training)\\b",
   "follow_up_pattern": "\\b(it|its|this|they|them)\\b",
+  "list_courses_pattern": "^\\s*((what|which)(\\s+are)?(\\s+all)?(\\s+the|\\s+your)?(\\s+available)?\\s+courses(\\s+(do\\s+you\\s+(have|offer|provide)|you\\s+(have|offer|provide)|are\\s+(there|available|offered)|can\\s+i\\s+take))?|(list|show|give|tell)(\\s+me)?(\\s+a)?(\\s+list\\s+of|\\s+all|\\s+the|\\s+your|\\s+available)*\\s+courses(\\s+you\\s+(have|offer))?|list\\s+of(\\s+all)?(\\s+the)?\\s+courses)\\s*[?.!]*\\s*$",
+  "outline_follow_up_pattern": "^\\s*((list|show|give)(\\s+me)?(\\s+all)?(\\s+the|\\s+of\\s+the)?|what\\s+(are|is)(\\s+all)?(\\s+the)?)\\s+(topics|sections|modules|chapters)\\s*[?.!]*\\s*$",
   "catalogue_pattern": "\\bcourses\\b|\\b(which|what|any|every|a|another)\\s+course\\b",
   "second_question_pattern": "\\band (who|what|how|which)\\b",
 

@@ -236,3 +236,70 @@ def test_rehearsal_waits_between_questions_only() -> None:
 def test_a_citation_with_no_words_is_not_an_answer(reply: str) -> None:
     result = Chatbot(StubRetriever(), StubLLM(reply)).ask("How long?")
     assert result.status == "not_found" and result.sources == []
+
+
+def test_a_year_in_a_course_title_is_not_a_citation() -> None:
+    reply = Chatbot(StubRetriever(), StubLLM("Machine Learning A-Z [2026] takes 40 hours [1].")).ask("How long?")
+    assert "[2026]" in reply.text and [s.number for s in reply.sources] == [1]
+
+
+@pytest.mark.parametrize("raw, shown", [
+    ("[1] It takes 22 hours.", "It takes 22 hours. [1]"),
+    ("[1] Java costs 5.\n[2] Python costs 6.", "Java costs 5. [1]\nPython costs 6. [2]"),
+    ("- [1] Beginners", "- Beginners [1]"),
+    ("It takes 22 hours [1].", "It takes 22 hours [1]."),
+])
+def test_a_citation_at_the_start_moves_to_the_end_of_its_line(raw: str, shown: str) -> None:
+    assert Chatbot(StubRetriever(), StubLLM(raw)).ask("How long?").text == shown
+
+
+COPIED_LABEL = "[2] Course: Machine Learning A-Z | Section: Requirements | Page: 22  "
+
+
+def test_a_copied_passage_label_is_not_a_citation() -> None:
+    reply = Chatbot(StubRetriever(), StubLLM(f"{COPIED_LABEL}\nThe fee is 999 rupees.")).ask("Fee?")
+    assert reply.status == "not_found" and reply.sources == []
+
+
+@pytest.mark.parametrize("label", [
+    "**[1] Course: Java | Section: Reqs | Page: 2**",
+    "[Passage 1] Course: Java | Section: Reqs | Page: 2",
+    "Course: Java | Section: Reqs | Page: 2",
+])
+def test_copied_label_variants_are_removed(label: str) -> None:
+    reply = Chatbot(StubRetriever(), StubLLM(f"{label}\nYou need maths [1].")).ask("Needs?")
+    assert reply.text == "You need maths [1]."
+
+
+def test_a_label_on_the_same_line_as_the_answer_is_removed() -> None:
+    reply = Chatbot(StubRetriever(), StubLLM("[1] Course: Java | Section: Reqs | Page: 2 You need maths [1].")).ask("Needs?")
+    assert reply.text == "You need maths [1]."
+
+
+@pytest.mark.parametrize("raw", ["Offered [2020-2026] for all [1].", "Editions [2025, 2026] for all [1]."])
+def test_bracketed_years_are_not_citations(raw: str) -> None:
+    assert Chatbot(StubRetriever(), StubLLM(raw)).ask("When?").text == raw
+
+
+def test_a_line_of_only_citations_keeps_its_order() -> None:
+    reply = Chatbot(StubRetriever(), StubLLM("It takes 22 hours.\n[1] [2]")).ask("How long?")
+    assert [s.number for s in reply.sources] == [1, 2]
+
+
+def test_a_reply_that_is_only_a_copied_label_is_not_an_answer() -> None:
+    reply = Chatbot(StubRetriever(), StubLLM(COPIED_LABEL)).ask("Needs?")
+    assert reply.status == "not_found" and reply.sources == []
+
+
+def test_a_copied_label_does_not_repeat_a_citation_already_in_the_answer() -> None:
+    reply = Chatbot(StubRetriever(), StubLLM(f"{COPIED_LABEL}\nYou need maths [2].")).ask("Needs?")
+    assert reply.text == "You need maths [2]."
+
+
+def test_the_course_list_comes_from_the_index_without_the_model() -> None:
+    llm = StubLLM()
+    reply = Chatbot(StubRetriever(list_courses=True, chunks=[]), llm).ask("What courses do you have?")
+    assert reply.status == "answered"
+    assert all(name in reply.text for name in COURSES.values())
+    assert llm.calls == []
+

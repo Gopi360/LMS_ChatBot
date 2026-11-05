@@ -25,7 +25,7 @@ System (LMS).
 
 - OS: Windows. IDE: Antigravity. Language: Python 3.10+.
 - CPU: Intel Core i3. RAM: 12 GB. GPU: Intel UHD (integrated only). **No NVIDIA GPU.**
-- LLM runtime: Ollama 0.40. Installed model tag: **`gemma3:1b`** (806 MB). `qwen3.5:4b` was removed as too heavy. Re-check with `ollama list`.
+- LLM runtime: Ollama 0.40. Installed model tag: **`qwen3:1.7b`** (1.4 GB). `qwen3.5:4b` was too heavy, and `gemma3:1b` left out citations; both were removed. Re-check with `ollama list`.
 - Optimise for CPU inference: small context window, no parallel LLM requests, low memory, short answers.
 
 ## 3. Technology stack
@@ -36,7 +36,7 @@ System (LMS).
 | Cleaning / chunking | custom Python (already built) |
 | Embeddings | `sentence-transformers/all-MiniLM-L6-v2` (local) |
 | Vector DB | ChromaDB, persistent under `vector_db/chroma/` |
-| LLM | Ollama over its HTTP API (`httpx`, no extra library); lightest model that passes, not yet chosen |
+| LLM | Ollama over its HTTP API (`httpx`, no extra library); `qwen3:1.7b` |
 | API | FastAPI + Uvicorn |
 | RAG framework | none at first (custom Python); keep modules separable so one can be added later |
 
@@ -50,7 +50,7 @@ Do not add libraries without a clear need.
 | 2. Cleaning and chunking | **Done and tested** |
 | 3. Embeddings + ChromaDB | **Done and tested** |
 | 4. Retrieval | **Done and tested; awaiting user approval** |
-| 5. LLM integration (RAG) | **Works with Gemini. Ollama provider built; `gemma3:1b` not demo-ready yet** (see `.claude/context/status.md`) |
+| 5. LLM integration (RAG) | **Works with Gemini and with `qwen3:1.7b` for short answers; long lists are still hidden** (see `.claude/context/status.md`) |
 | 6. FastAPI backend | to do |
 | 7. Testing and evaluation | to do |
 

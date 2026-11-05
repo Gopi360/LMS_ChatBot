@@ -8,6 +8,7 @@
 | We do not train the model | Knowledge comes from search, so new PDFs need no retraining | Technical |
 | Plan on a local model; no paid API is expected | Add one only if it actually arrives. Confirm with the manager | User |
 | Use the lightest local model that answers correctly from a chunk | Must run on the current laptop. A stronger model is the later upgrade | User |
+| `qwen3:1.7b` is the local model | `gemma3:1b` read well but left out citations, so 0 of 12 answers were shown | User, after testing |
 | Gemini free tier stays available for the demo PDFs | Works today while the local model is being proven | User |
 | Real PDFs must never use the Gemini free tier | Google may use free-tier prompts, and people may read them | Project rule |
 | Gemini is a stand-in, not the final plan | Free-tier data use, and it says nothing about local model quality | Technical |

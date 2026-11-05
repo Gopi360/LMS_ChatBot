@@ -373,3 +373,48 @@ def test_a_follow_up_matching_an_example_is_in_scope(retriever: Retriever) -> No
     r = Retriever(retriever.collection, fake_embed, rules, top_k=4, min_similarity=0.05, min_similarity_no_course=0.05,
                   min_similarity_follow_up=0.99)
     assert r.retrieve(question, default_course=PY).in_scope
+
+
+def test_a_short_outline_request_follows_the_remembered_course(retriever: Retriever) -> None:
+    result = _loose(retriever, follow_up_cutoff=0.99).retrieve("List all sections", default_course=PY)
+    assert result.in_scope and result.route.courses == [PY] and result.route.intent == "curriculum_list"
+
+
+def test_a_long_outline_request_about_something_else_stays_out_of_scope(retriever: Retriever) -> None:
+    strict = Retriever(retriever.collection, fake_embed, RULES, top_k=4, min_similarity_follow_up=0.99, use_examples=False)
+    assert not strict.retrieve("List all the chapters of the Bible", default_course=PY).in_scope
+
+
+@pytest.mark.parametrize("question", [
+    "What are the courses you have?", "What courses do you offer?", "Which courses are available?",
+    "list all courses", "show me your courses", "what courses are there", "What are the available courses?",
+    "What are your courses?", "Give me a list of courses", "List of courses", "What courses can I take?",
+])
+def test_asking_for_the_course_list_needs_no_search(retriever: Retriever, question: str) -> None:
+    result = retriever.retrieve(question)
+    assert result.list_courses and result.chunks == []
+
+
+@pytest.mark.parametrize("question", [
+    "Which courses have a certificate?", "What courses cover Python?", "Compare the prices of the courses",
+    "Which course is the longest?", "What are the prices of the courses you offer?",
+    "What is the duration of the courses available?", "Which of the courses you offer is the cheapest?",
+    "What courses do you recommend for beginners?", "What courses are available at Harvard?",
+    "What cooking courses do you have?",
+])
+def test_a_question_about_the_courses_is_not_a_request_for_the_list(retriever: Retriever, question: str) -> None:
+    assert not retriever.retrieve(question).list_courses
+
+
+@pytest.mark.parametrize("question", ["Show me hotel sections", "Show chapters of the Bible", "What topics do you like?",
+                                      "List topics in biology"])
+def test_a_short_off_topic_outline_question_stays_out_of_scope(retriever: Retriever, question: str) -> None:
+    strict = Retriever(retriever.collection, fake_embed, RULES, top_k=4, min_similarity_follow_up=0.99, use_examples=False)
+    assert not strict.retrieve(question, default_course=PY).in_scope
+
+
+@pytest.mark.parametrize("question", ["List all sections", "show the topics", "What are the modules?"])
+def test_a_plain_outline_request_follows_the_remembered_course(retriever: Retriever, question: str) -> None:
+    strict = Retriever(retriever.collection, fake_embed, RULES, top_k=4, min_similarity_follow_up=0.99, use_examples=False)
+    assert strict.retrieve(question, default_course=PY).in_scope
+

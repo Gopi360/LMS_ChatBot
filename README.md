@@ -64,7 +64,7 @@ rejected. That set has been used once, so write a new one before measuring anoth
 ## Answers with a local model (Ollama)
 Nothing leaves this machine, so this is the route for real PDFs.
 
-1. Install [Ollama](https://ollama.com) and download a model: `ollama pull gemma3:1b`
+1. Install [Ollama](https://ollama.com) and download a model: `ollama pull qwen3:1.7b`
 2. Add `LLM_PROVIDER=ollama` to `.env`.
 3. Ask a question: `python -m app.generation.chatbot "How long is the Python course?"`
 
@@ -72,7 +72,7 @@ To try another model, run `ollama pull <model>` and set `LLM_MODEL` in `.env`. N
 `.env.example`. Measure speed with `python -m evaluation.llm_speed_test`, and rehearse with
 `python -m evaluation.rehearse_demo --pause 0`.
 
-**`gemma3:1b` is not ready for a demo yet.** It usually leaves out citations, so most correct answers are hidden. See Known limits.
+**`qwen3:1.7b` is the chosen local model.** Its answers vary between runs, so rehearse before a demo. See Known limits.
 
 ## Answers with Gemini (demo PDFs only)
 Gemini is still the default provider. Retrieval runs on this machine. Only the question and the passages found for it go to Gemini, which writes the reply.
@@ -110,7 +110,7 @@ To add a paid service later, add a class in `app/generation/llm.py` and select i
 * Retrieval depends on recognised wording. Unusual phrasing still reaches the right course but may miss the right chunk.
 * A course removed from `Courses/` stays in the index until `--rebuild`; the indexer warns about it.
 * Qwen 4B took about 1–2 minutes per answer on the development laptop (i3, CPU only); see `Latest_Plan.md` section 6.
-* `gemma3:1b` takes about 5–20 s per answer on that laptop (slowest 52 s), but matched only 5 of the 14 demo questions, mostly because it leaves out citations.
+* `qwen3:1.7b` takes about 3–20 s per answer on that laptop, and 35–70 s for a long list. It matched 13 of the 14 demo questions in one run. It sometimes copies a passage label instead of citing, so a correct answer shows as "not available". It also leaves out the saved date on prices.
 * Three demo PDFs (Python, Machine Learning, Ethical Hacking) were saved with "What you'll learn" collapsed ("Show more"); the hidden items are not in those files. Export with the list expanded.
 * Scanned PDFs (images) have no text layer and need OCR; the report flags them.
 * Price/offer text is a snapshot; chunks state the date the page was saved.

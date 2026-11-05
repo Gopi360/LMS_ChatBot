@@ -73,6 +73,7 @@ class RetrievalResult:
     route: Route
     in_scope: bool = True
     needs_course: bool = False       # the question needs a course name; ask the student which one
+    list_courses: bool = False       # the student wants the list of courses, so no search is needed
     best_similarity: float = 0.0
     chunks: List[RetrievedChunk] = field(default_factory=list)
 
@@ -297,6 +298,8 @@ class Retriever:
         "it" can only mean the course ("Who made it?"). Otherwise it is off-topic chat."""
         if similarity >= self.min_similarity_follow_up:
             return True
+        if re.search(self.rules.get("outline_follow_up_pattern", r"$^"), question, re.IGNORECASE):
+            return True                         # "List all sections" says nothing but that
         pronoun = re.search(self.rules.get("follow_up_pattern", r"$^"), question, re.IGNORECASE)
         if pronoun and len(question.split()) <= config.RETRIEVAL_FOLLOW_UP_MAX_WORDS:
             return True
@@ -326,6 +329,9 @@ class Retriever:
             route.courses = [default_course]
             route.follow_up = True
         result = RetrievalResult(question=question, route=route)
+        if not route.courses and re.search(self.rules.get("list_courses_pattern", r"$^"), question, re.IGNORECASE):
+            result.list_courses = True
+            return result
         if route.fetch_all and not route.courses:   # short, so it can score below the cutoff
             result.needs_course = True
             return result
@@ -379,6 +385,8 @@ def _show(result: RetrievalResult) -> None:
     print(f"\nCourse: {r.courses or 'not named'} | type: {r.intent}{' (by example)' if r.matched_by == 'example' else ''} | best similarity: {result.best_similarity:.3f}")
     if not result.in_scope:
         print("Out of scope: nothing in the course documents matches this question.")
+    if result.list_courses:
+        print("  The student wants the list of courses, so no search is needed.")
     if result.needs_course:
         print("Needs a course: ask the student which course they mean.")
     for c in result.chunks:
