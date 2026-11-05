@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-04. Check `git log` and `git status` too, as this file can fall behind.
+Last updated: 2026-11-05. Check `git log` and `git status` too, as this file can fall behind.
 
 ## Phases
 
@@ -10,7 +10,7 @@ Last updated: 2026-11-04. Check `git log` and `git status` too, as this file can
 | 2. Cleaning and chunking | Done: 304 chunks from 5 demo PDFs |
 | 3. Embeddings and index | Done |
 | 4. Retrieval | Done, awaiting manager approval |
-| 5. LLM answers | Working for the demo with Gemini. Qwen provider not built |
+| 5. LLM answers | Works with Gemini. Ollama provider built, but `gemma3:1b` is not demo-ready (see Measured results) |
 | 6. FastAPI backend | Not started. Design is in `Latest_Plan.md` section 10 |
 | 7. Testing and evaluation | Not started. Answer quality has no measured score yet |
 
@@ -24,7 +24,8 @@ Each branch builds on the one before it. `main` is only the Phase 1-2 baseline.
 | `feat/phase3-vector-index` | Cleanup, fixes, Phase 3 | Yes |
 | `feat/phase4-retrieval` | Phase 4 | Yes |
 | `feat/semantic-question-routing` | Example-question routing | Yes |
-| `feat/gemini-answers` | Gemini answers. **The latest work** | Yes |
+| `feat/gemini-answers` | Gemini answers | Yes |
+| `feat/local-llm-provider` | Ollama provider. **The latest work** | Yes |
 
 Repo: https://github.com/Gopi360/LMS_ChatBot (public).
 
@@ -38,11 +39,16 @@ Repo: https://github.com/Gopi360/LMS_ChatBot (public).
 - **Demo rehearsal with real Gemini:** 13 of 14 behaved as expected. The miss was a bug, since fixed, and the refund question's
   expected result was wrong. The full 14 has not been rerun since. Most replies took about 2-14 s, the slowest about 31 s.
 - **Follow-ups, hand-written list:** 19 of 21 real and 10 of 12 off-topic behaved correctly. Small list, not a quality score.
-- **Qwen 4B on the current laptop:** about 1-2 minutes per reply (provisional). This is why the demo uses Gemini.
-- **Tests:** 149 pass with `python -m pytest tests -q`.
+- **Qwen 4B on the current laptop:** about 1-2 minutes per reply (provisional). It has been removed from the laptop.
+- **`gemma3:1b`, 14 demo questions, final code, one run:** 5 of 14 matched, and only 1 of those was a written answer. The other 9
+  came back `not_found`. An earlier run logged 8 of these as hidden for having no citation. Most replies took 5-20 s, the slowest 52 s.
+  Raw replies on 5 questions were correct but uncited, or just "Yes". A one-line reminder fixed citations with 1 passage. With 4
+  passages the model copied the passage headers instead, and that would pass the citation check. The reminder is not in the code.
+- **Tests:** 175 pass with `python -m pytest tests -q`.
 
 ## Current setup
 
+- `LLM_PROVIDER` still defaults to `gemini`. Set `LLM_PROVIDER=ollama` to use the local model. `gemma3:1b` is installed.
 - Local `.env` has the Gemini key and `GEMINI_MODEL=gemini-3.6-flash`, because `gemini-3.8-flash` returned 503 (high demand).
   The code default is still `gemini-3.8-flash`.
 
@@ -56,16 +62,20 @@ Repo: https://github.com/Gopi360/LMS_ChatBot (public).
 
 **Waiting on others:**
 - [ ] Manager approval of Phase 4, then merge to `main`.
-- [ ] New laptop or a chosen server, for Qwen.
 - [ ] LMS team contact, and answers to the questions in `Latest_Plan.md` section 10.
 - [ ] Real PDFs, or one sample file. Layout is the biggest unknown. A different layout falls back to generic chunks.
 
 **Known gaps in the code:**
+- The local model leaves out citations, so its correct answers are hidden. Decide the fix, then compare `qwen3:0.6b` and `qwen3:1.7b`.
+- The rehearsal checks reply status, not facts. A 15-question known-answer test is still needed.
 - Course words used as ordinary words pass retrieval ("best beaches in Java"). The prompt has to refuse them.
 - Very short off-topic questions with "it" reach Gemini ("How do I cook it?").
 - "Do I get a certificate?" and "Can I run it on AWS?" fail as follow-ups unless the course is named.
 - Only the last course is remembered, not earlier turns.
 - "List all the chapters of the Bible" gets "Which course do you mean?".
-- Students could see setup messages such as "Check GEMINI_API_KEY". Split these before Phase 6.
+- Students could see setup messages such as "Check GEMINI_API_KEY" or "Run: ollama pull". Split these before Phase 6.
+- `LLM_PROVIDER` defaults to `gemini`, so a machine with a Gemini key and no setting sends passages to Google. Change the default
+  before real PDFs arrive.
+- A copied passage header carries a citation, so it passes the citation check. Fix this with the citation decision.
 - `last_courses` lives on one `Chatbot` object. Phase 6 needs one per student session.
 - The last round of review fixes had no second independent review.

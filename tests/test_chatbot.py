@@ -230,3 +230,9 @@ def test_rehearsal_waits_between_questions_only() -> None:
     rehearse(Chatbot(StubRetriever(), StubLLM()), [{"q": "a", "expect": "answered"}, {"q": "b", "expect": "answered"}],
              pause=7, sleep=waits.append)
     assert waits == [7]
+
+
+@pytest.mark.parametrize("reply", ["[1]", "[1].", f"{NOT_FOUND_MARK} [1]"])
+def test_a_citation_with_no_words_is_not_an_answer(reply: str) -> None:
+    result = Chatbot(StubRetriever(), StubLLM(reply)).ask("How long?")
+    assert result.status == "not_found" and result.sources == []

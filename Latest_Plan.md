@@ -25,7 +25,7 @@ System (LMS).
 
 - OS: Windows. IDE: Antigravity. Language: Python 3.10+.
 - CPU: Intel Core i3. RAM: 12 GB. GPU: Intel UHD (integrated only). **No NVIDIA GPU.**
-- LLM runtime: Ollama 0.40. Installed model tag: **`qwen3.5:4b`** (4.2B, Q4_K_M, 3.3 GB). Re-check with `ollama list` on any new machine.
+- LLM runtime: Ollama 0.40. Installed model tag: **`gemma3:1b`** (806 MB). `qwen3.5:4b` was removed as too heavy. Re-check with `ollama list`.
 - Optimise for CPU inference: small context window, no parallel LLM requests, low memory, short answers.
 
 ## 3. Technology stack
@@ -36,7 +36,7 @@ System (LMS).
 | Cleaning / chunking | custom Python (already built) |
 | Embeddings | `sentence-transformers/all-MiniLM-L6-v2` (local) |
 | Vector DB | ChromaDB, persistent under `vector_db/chroma/` |
-| LLM | Ollama + `qwen3.5:4b` (Ollama Python client) |
+| LLM | Ollama over its HTTP API (`httpx`, no extra library); lightest model that passes, not yet chosen |
 | API | FastAPI + Uvicorn |
 | RAG framework | none at first (custom Python); keep modules separable so one can be added later |
 
@@ -50,7 +50,7 @@ Do not add libraries without a clear need.
 | 2. Cleaning and chunking | **Done and tested** |
 | 3. Embeddings + ChromaDB | **Done and tested** |
 | 4. Retrieval | **Done and tested; awaiting user approval** |
-| 5. LLM integration (RAG) | **Built for the demo with Gemini; not yet tested with a real key.** Qwen waits for better hardware |
+| 5. LLM integration (RAG) | **Works with Gemini. Ollama provider built; `gemma3:1b` not demo-ready yet** (see `.claude/context/status.md`) |
 | 6. FastAPI backend | to do |
 | 7. Testing and evaluation | to do |
 
@@ -260,6 +260,9 @@ on the new laptop.
 7. Deliverables: `retriever.py`, retrieval test script. **Stop for approval.**
 
 ### Phase 5: LLM integration and RAG
+**Update 2026-11-05:** no paid API is expected, so a light local model on this laptop is now the plan. `OllamaGenerator` is built, and
+the Gemini and Qwen 4B notes below are history. Current results are in `.claude/context/status.md`.
+
 **Demo status:** the answer step exists in `app/generation/` (`llm.py`, `prompts.py`, `chatbot.py`), using Gemini
 (`gemini-3.8-flash`) instead of Ollama, so the demo does not need new hardware. Gemini is a stand-in: its answers say nothing
 about how Qwen 4B would perform, and its free tier must not receive real PDFs or student data. It is tested with stand-ins for

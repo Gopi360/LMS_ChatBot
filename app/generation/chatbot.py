@@ -109,7 +109,7 @@ class Chatbot:
         except LLMError as exc:
             return ChatReply(question, "unavailable", str(exc))
         text, cited = _read_citations(text.replace(NOT_FOUND_MARK, "").strip(), len(result.chunks))
-        if not text:
+        if not re.sub(r"\[\d+\]", "", text).strip(" .,;\n"):      # nothing left but citations
             return ChatReply(question, "not_found", NOT_FOUND_REPLY)
         if not cited:
             log.warning("An answer with no valid citation was not shown: %s", question)
